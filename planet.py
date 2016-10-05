@@ -38,11 +38,14 @@ class Planet:
         self = Planet(-1, "-1")
         info = s.split(";")
         for i in info:
-            if not "=" in i:
+            if "=" not in i:
                 continue
             (name, val) = i.split("=")
-            if name in ('x', 'y', 'PlayerID', 'ID'):
-                setattr(self, name, int(float(val)))
+            if name in ('x', 'y'):
+                setattr(self, name, (float(val)))
+                continue
+            if name in ('PlayerID', 'ID'):
+                setattr(self, name, (int(val)))
                 continue
             setattr(self, name, val)
         return self
