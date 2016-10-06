@@ -23,7 +23,7 @@ import random
 import math
 
 import mynetwork
-import Game1
+import game
 import utils
 
 
@@ -116,8 +116,8 @@ class BaseAI1(mynetwork.SingleLineMasterClient):
         if self.PlanetInfo is None:
             return
         #print "processing!"
-        self.PlanetInfoParsed = [Game1.Planet.FromString(x) for x in self.PlanetInfo]
-        self.FleetInfoParsed =[Game1.Fleet.FromString(x) for x in self.FleetInfo]
+        self.PlanetInfoParsed = [game.Planet.FromString(x) for x in self.PlanetInfo]
+        self.FleetInfoParsed =[game.Fleet.FromString(x) for x in self.FleetInfo]
         self.MyPlanets = []
         self.EnemyPlanets = []
         for p in self.PlanetInfoParsed:

@@ -18,10 +18,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import combat1
+import combat
 
-from Game1 import Fleet
-from combat1 import Combat
+from game import Fleet
+from combat import Combat
 
 
 
@@ -47,10 +47,10 @@ def main():
     for seed in range(0,1000):
         f1 = CreateFleet1()
         f2 = CreateFleet2()
-        combat = Combat(seed,[f1,f2])
-        combat.HitLevel=400
-        combat.RunCombat(run_one_step=False)
-        out = combat.OutFleets[0]
+        batlle = Combat(seed,[f1,f2])
+        battle.HitLevel=400
+        battle.RunCombat(run_one_step=False)
+        out = battle.OutFleets[0]
         
         #print out.PlayerID,out.Ships
         if out.PlayerID == 1:

@@ -21,7 +21,7 @@ limitations under the License.
 import math
 from pprint import pprint
 import random
-from Planet import Planet
+from planet import Planet
 
 planetcodes = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 

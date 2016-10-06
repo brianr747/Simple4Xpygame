@@ -23,7 +23,7 @@ from pprint import pprint
 import socket, traceback, time,select,threading
 
 
-from Game1 import Game
+from game import Game
 
 class GameServer(mynetwork.SingleLineProtocolServer):
     "Game server"

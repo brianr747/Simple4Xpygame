@@ -23,7 +23,7 @@ import time,traceback
 import random
 import math
 
-from BaseAI1 import BaseAI1
+from baseAI import BaseAI1
 
 
 class AIDeliberate1(BaseAI1):

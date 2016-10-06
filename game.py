@@ -22,10 +22,10 @@ import random
 import math
 
 import utils
-import combat1
-from Galaxy import Galaxy
-from Fleet1 import Fleet
-from Planet import Planet
+import combat
+from galaxy import Galaxy
+from fleet import Fleet
+from planet import Planet
 
 
 # class Planet:
@@ -463,8 +463,8 @@ class Game:
             ##            print "Before:"
             ##            for f in loc_fleets:
             ##                print f.ToString()
-            combat = combat1.Combat(seed, loc_fleets)
-            combat.RunCombat(run_one_step=False)
+            battle = combat.Combat(seed, loc_fleets)
+            battle.RunCombat(run_one_step=False)
             ##            print "After"
             ##            for f in loc_fleets:
             ##                print f.ToString()
