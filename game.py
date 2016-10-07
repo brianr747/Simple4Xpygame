@@ -87,6 +87,9 @@ class Player:
         self.VisiblePlanets = {}
         self.PreviouslyVisiblePlanets = {}
         self.VisibleFleets = []
+        self.Name = "Playur%02i" % (ID,)
+        self.Race = "BattleCat"
+
 
     def Dump(self):
         pprint("Player")
@@ -476,12 +479,18 @@ class Game:
                     print "Conquered:", p.PlanetCode, "by", loc_fleets[0].PlayerID
                     p.PlayerID = loc_fleets[0].PlayerID
 
+    def DoLog(self):
+        for p in self.PlayerList:
+            pprint((p.Name, p.Race))
+
     def EndOfTurn(self):
         self.Production()
         # TODO:
         self.MoveFleets()
         self.Combat()
         self.DetermineVisibility()
+
+        self.DoLog()
 
         # End step processing
         self.Turn = self.Turn + 1

@@ -27,6 +27,12 @@ from baseAI import BaseAI1
 
 
 class AIDeliberate1(BaseAI1):
+    def __init__(self):
+        super(AIDeliberate1, self).__init__()
+        #self.Name = "AI Deliberate1"
+        self.Race = "AIDeliberate1"
+
+
     def CalculateTurn(self):
         print "Starting",self.GameTurn
         self.CalcDistances()

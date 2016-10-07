@@ -24,6 +24,7 @@ import socket, traceback, time,select,threading
 
 
 from game import Game
+import utils
 
 class GameServer(mynetwork.SingleLineProtocolServer):
     "Game server"
@@ -45,12 +46,6 @@ class GameServer(mynetwork.SingleLineProtocolServer):
         try:
             while True:
                 time.sleep(.05)
-##                kys = self.WrapperDict.keys()
-##                cnt += 1
-##                if cnt == 50:
-##                    for k in kys:
-##                        self.sendmessage(k,"HEARTBEAT:" + self.State)
-##                    cnt = 0
                 self.network_events()
         except:
             traceback.print_exc()
@@ -83,7 +78,7 @@ class GameServer(mynetwork.SingleLineProtocolServer):
         if "JOIN" in msg:
             self.AddPlayer(msg,FileNo)
             return
-        if "OBSERVE_AS" == msg[0:10]:
+        if msg.startswith("OBSERVE_AS"):
             ID = int(msg[11:]) % self.NumPlayers        
             self.ObserveAs[FileNo] = ID
             return
@@ -119,7 +114,7 @@ class GameServer(mynetwork.SingleLineProtocolServer):
                 response= self.Game.GetFleets(ID)
                 self.sendmessage(FileNo,response)
                 return
-            if msg[0:4] == 'MOVE':
+            if msg.startswith('MOVE'):
                 try:
                     ID = self.PlayerLookup[FileNo]
                 except:
@@ -135,27 +130,39 @@ class GameServer(mynetwork.SingleLineProtocolServer):
                 if status is not None:
                     self.sendmessage(FileNo,"ERROR;"+status)
                 return
-            if msg[0:5] == 'SPLIT':
+            if msg.startswith('SPLIT'):
                 try:
                     ID = self.PlayerLookup[FileNo]
-                except:
+                except KeyError:
                     return
                 msg = msg.split(";")
                 try:
                     fleetID = int(msg[1])
                     planetID = int(msg[2])
                     ships = int(msg[3])
-                except:
+                except Exception:
                     self.sendmessage(FileNo,"ERROR;Split Syntax")
                     return
                 status = self.Game.OrderSplitFleet(ID,fleetID,planetID,ships)
                 if status is not None:
                     self.sendmessage(FileNo,"ERROR;"+status)
                 return
-                    
-                    
-                
-            
+            if msg.startswith("SETNAME"):
+                try:
+                    ID = self.PlayerLookup[FileNo]
+                except KeyError:
+                    return
+                try:
+                    info = utils.ParseCommString(msg)
+                except ValueError:
+                    self.sendmessage(FileNo, "Error: SETNAME Syntax: " + msg)
+                try:
+                    info = info[0]
+                    self.Game.PlayerList[ID].Name = info["Name"]
+                    self.Game.PlayerList[ID].Race = info["Race"]
+                except KeyError:
+                    self.sendmessage(FileNo,"Error: Missing SETNAME info: " + msg)
+                return
         print "Unhandled message:",msg,FileNo
 
     def SendState(self,FileNo):

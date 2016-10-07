@@ -17,21 +17,37 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-
-import time,traceback
+import time
+import traceback
 import random
 import math
 
 import mynetwork
 import game
-import utils
+
+
+# import utils
+
+
+def getrandomname():
+    name_base = [
+        "Murfskins", "Gingerton", "Smokes", 'Toothy'
+    ]
+
+    name_suffix = [
+        '', 'Twenty-One', 'IV', 'XXI'
+    ]
+    name = name_base[random.randint(0, len(name_base) - 1)]
+    suffix = name_suffix[random.randint(0, len(name_suffix) - 1)]
+    out = name + ' ' + suffix
+    return out.strip()
 
 
 class BaseAI1(mynetwork.SingleLineMasterClient):
-    "Base for AI class, Version 1 of game"
+    """Base for AI class, Version 1 of game"""
 
     def __init__(self):
-        super(BaseAI1,self).__init__()
+        super(BaseAI1, self).__init__()
         self.PlayerID = None
         self.State = "JOINING"
         self.GameState = None
@@ -43,21 +59,23 @@ class BaseAI1(mynetwork.SingleLineMasterClient):
         self.MyPlanets = []
         self.EnemyPlanets = []
         self.InRange = {}
-        
-        
-    def handler_message(self,msg,FileNo):
-        #print "Receieved '%s' from %i" % (msg,FileNo)
+        # Base classes should set this...
+        self.Name = getrandomname()
+        self.Race = "AI"
+
+    def handler_message(self, msg, FileNo):
+        # print "Receieved '%s' from %i" % (msg,FileNo)
         if self.State == "JOINING":
             if "PLAYERS," in msg:
                 msg = msg.split(",")
                 msg.pop(0)
                 player_connected = [x == "True" for x in msg]
-                #print player_connected
+                # print player_connected
                 if False not in player_connected:
                     raise ValueError("Too many players")
                 response = ""
-                for i in range(0,len(player_connected)):
-                    if player_connected[i] == False:
+                for i in range(0, len(player_connected)):
+                    if not player_connected[i]:
                         response = "JOIN-%i" % (i,)
                         break
                 self.sendserver(response)
@@ -70,18 +88,19 @@ class BaseAI1(mynetwork.SingleLineMasterClient):
         if "STATE" in msg.upper():
             old_state = self.GameState
             self.GameState = msg
-            if not msg == old_state:              
+            if not msg == old_state:
                 if not "STARTED" in msg.upper():
                     return
                 msg = msg.split(":")
                 info = msg[2]
-                #print info
-                assert(info[0:5].upper() == "TURN=")
+                # print info
+                assert (info[0:5].upper() == "TURN=")
                 self.GameTurn = int(info[5:])
                 # Wait  to make sure that buffers are cleared
                 time.sleep(.1)
                 self.FleetInfo = None
                 self.PlanetInfo = None
+                self.sendserver("SETNAME|Name=%s;Race=%s" % (self.Name, self.Race))
                 self.sendserver("?PLANETS")
                 self.sendserver("?FLEETS")
                 time.sleep(.1)
@@ -90,9 +109,9 @@ class BaseAI1(mynetwork.SingleLineMasterClient):
             info = msg.split("|")
 
             self.PlanetInfo = info[1:]
-            if self.PlanetInfo==[""]:
+            if self.PlanetInfo == [""]:
                 # Presumably, the player is dead...
-                self.PlanetInfo = []                        
+                self.PlanetInfo = []
             return
         if "FLEETS" in msg.upper():
             info = msg.split("|")
@@ -101,23 +120,23 @@ class BaseAI1(mynetwork.SingleLineMasterClient):
                 # No fleets on first turn (at least) - trailing "|" creates an empty string...
                 self.FleetInfo = []
             return
-                                  
-        print "Unhandled msg",msg
-        #mynetwork.SingleLineMasterClient.handler_message(self,msg,FileNo)
 
-    def sendmessage(self,FileNo,msg):
-        #print "Sent %i '%s'" % (FileNo,msg)
-        mynetwork.SingleLineProtocolServer.sendmessage(self,FileNo,msg)
+        print "Unhandled msg", msg
+        # mynetwork.SingleLineMasterClient.handler_message(self,msg,FileNo)
+
+    def sendmessage(self, FileNo, msg):
+        # print "Sent %i '%s'" % (FileNo,msg)
+        mynetwork.SingleLineProtocolServer.sendmessage(self, FileNo, msg)
 
     def InitCalculateTurn(self):
-        "Does initial set up"
+        """Does initial set up"""
         if self.FleetInfo is None:
             return
         if self.PlanetInfo is None:
             return
-        #print "processing!"
+        # print "processing!"
         self.PlanetInfoParsed = [game.Planet.FromString(x) for x in self.PlanetInfo]
-        self.FleetInfoParsed =[game.Fleet.FromString(x) for x in self.FleetInfo]
+        self.FleetInfoParsed = [game.Fleet.FromString(x) for x in self.FleetInfo]
         self.MyPlanets = []
         self.EnemyPlanets = []
         for p in self.PlanetInfoParsed:
@@ -132,14 +151,13 @@ class BaseAI1(mynetwork.SingleLineMasterClient):
 
     def CalculateTurn(self):
         raise NotImplementedError("Must override this method in subclasses!")
-        
 
     def CalcDistances(self):
         self.Distances = {}
         for p1 in self.PlanetInfoParsed:
             for p2 in self.PlanetInfoParsed:
-                dist = math.sqrt(float(pow(p1.x - p2.x,2)) +float(pow(p1.y - p2.y,2)))
-                self.Distances[(p1.ID,p2.ID)] = dist
+                dist = math.sqrt(float(pow(p1.x - p2.x, 2)) + float(pow(p1.y - p2.y, 2)))
+                self.Distances[(p1.ID, p2.ID)] = dist
         return
 
     def CalculateInRange(self):
@@ -152,12 +170,13 @@ class BaseAI1(mynetwork.SingleLineMasterClient):
             for p2 in self.PlanetInfoParsed:
                 if p1 == p2:
                     continue
-                if self.Distances[(p1.ID,p2.ID)] < self.ShipRange:
+                if self.Distances[(p1.ID, p2.ID)] < self.ShipRange:
                     if p2.PlayerID == self.PlayerID:
                         friendly.append(p2)
                     else:
                         enemy.append(p2)
-            self.InRange[p1.ID] = (enemy,friendly)
+            self.InRange[p1.ID] = (enemy, friendly)
+
     def CalcShipsAtPlanet(self):
         for p in self.PlanetInfoParsed:
             p.Ships = 0
@@ -165,10 +184,9 @@ class BaseAI1(mynetwork.SingleLineMasterClient):
                 if f.AtPlanetID == p.ID:
                     # Insert new field - yay for Python!
                     p.Ships = f.Ships
-            
 
     def OldCode(self):
-        "Random old code..."
+        """Random old code..."""
         planetlist = [p.ID for p in self.PlanetInfoParsed]
         for f in self.FleetInfoParsed:
             if not f.PlayerID == self.PlayerID:
@@ -180,38 +198,34 @@ class BaseAI1(mynetwork.SingleLineMasterClient):
             inrange = []
             targ_ID = None
             for p in self.EnemyPlanets:
-                if self.Distances[(p.ID,f.AtPlanetID)] < self.ShipRange:
+                if self.Distances[(p.ID, f.AtPlanetID)] < self.ShipRange:
                     inrange.append(p)
             if len(inrange) > 0:
-                pos = random.randint(0,len(inrange)-1)
+                pos = random.randint(0, len(inrange) - 1)
                 targ_ID = inrange[pos].ID
             else:
                 inrange = []
                 for p in self.MyPlanets:
-                    if self.Distances[(p.ID,f.AtPlanetID)] < self.ShipRange:
+                    if self.Distances[(p.ID, f.AtPlanetID)] < self.ShipRange:
                         inrange.append(p)
                 if len(inrange) > 0:
-                    pos = random.randint(0,len(inrange)-1)
-                    targ_ID = inrange[pos].ID             
+                    pos = random.randint(0, len(inrange) - 1)
+                    targ_ID = inrange[pos].ID
             if targ_ID is not None:
-                msg = "MOVE;%i;%i" % (ID,targ_ID)
+                msg = "MOVE;%i;%i" % (ID, targ_ID)
                 self.sendserver(msg)
                 print msg
-        #a = raw_input("Hit return to continue> ")
-        
+        # a = raw_input("Hit return to continue> ")
+
         self.sendserver("FINISHED")
         self.LastProcessed = self.GameTurn
-        
-        
-            
-                
 
     def main(self):
         # Have to run this to get the connection set up
         self.State = "JOINING"
-        self.network_events() 
+        self.network_events()
         cnt = 0
-        self.sendserver("?PLAYERS")     
+        self.sendserver("?PLAYERS")
         try:
             while True:
                 time.sleep(.1)
@@ -221,12 +235,9 @@ class BaseAI1(mynetwork.SingleLineMasterClient):
                     self.InitCalculateTurn()
         except:
             traceback.print_exc()
-            time.sleep(20)        
-        
-##if __name__ == '__main__':
+            time.sleep(20)
+
+            ##if __name__ == '__main__':
+
 ##    client = AIMasterClient()
 ##    client.main()
-
-    
-
-
