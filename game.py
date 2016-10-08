@@ -1,5 +1,19 @@
 """
-Game1.py
+game.py
+
+Copyright 2016 Brian Romanchuk
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 """
 
@@ -8,10 +22,10 @@ import random
 import math
 
 import utils
-import combat1
-from Galaxy import Galaxy
-from Fleet1 import Fleet
-from Planet import Planet
+import combat
+from galaxy import Galaxy
+from fleet import Fleet
+from planet import Planet
 
 
 # class Planet:
@@ -73,6 +87,9 @@ class Player:
         self.VisiblePlanets = {}
         self.PreviouslyVisiblePlanets = {}
         self.VisibleFleets = []
+        self.Name = "Playur%02i" % (ID,)
+        self.Race = "BattleCat"
+
 
     def Dump(self):
         pprint("Player")
@@ -449,8 +466,8 @@ class Game:
             ##            print "Before:"
             ##            for f in loc_fleets:
             ##                print f.ToString()
-            combat = combat1.Combat(seed, loc_fleets)
-            combat.RunCombat(run_one_step=False)
+            battle = combat.Combat(seed, loc_fleets)
+            battle.RunCombat(run_one_step=False)
             ##            print "After"
             ##            for f in loc_fleets:
             ##                print f.ToString()
@@ -462,12 +479,18 @@ class Game:
                     print "Conquered:", p.PlanetCode, "by", loc_fleets[0].PlayerID
                     p.PlayerID = loc_fleets[0].PlayerID
 
+    def DoLog(self):
+        for p in self.PlayerList:
+            pprint((p.Name, p.Race))
+
     def EndOfTurn(self):
         self.Production()
         # TODO:
         self.MoveFleets()
         self.Combat()
         self.DetermineVisibility()
+
+        self.DoLog()
 
         # End step processing
         self.Turn = self.Turn + 1

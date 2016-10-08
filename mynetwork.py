@@ -2,6 +2,25 @@
 
 """
 mynetwork.py:  Network client/server module.
+
+Note that I based this on code from a book ["Python Network Programming" by ??].
+There will be similarities to the original, but I
+believe that this code is essentially mine.
+
+
+Copyright 2016 Brian Romanchuk
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
 # stdlib imports
@@ -414,60 +433,4 @@ if __name__ == '__main__':
     except:
         traceback.print_exc()
     a = raw_input("hit any key>")
-
-
-        
-
-
-##s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-##s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-##s.bind((host, port))
-##s.listen(1)
-##
-##while 1:
-##    try:
-##        clientsock, clientaddr = s.accept()
-##    except KeyboardInterrupt:
-##        raise
-##    except:
-##        traceback.print_exc()
-##        continue
-##
-##    raise "blam"
-##    # Process the connection
-##
-##    try:
-##        print "Got connection from", clientsock.getpeername()
-##        while 1:
-##            infds, outfds, errfds = select.select([clientsock], [clientsock], [clientsock], 0.0)
-##            if len(outfds):           
-##                try:
-##                    clientsock.sendall(time.asctime() + "\n")
-##                except:
-##                    break
-##            if len(infds):
-##                data = clientsock.recv(4096)
-##                if not len(data):
-##                    print "BYE!"
-##                    break
-##                print "-" *20
-##                print data
-##                print "-"*20
-##                print len(data)
-##            if len(errfds):
-##                raise "BOOM!"
-##            time.sleep(.1)
-##    except (KeyboardInterrupt, SystemExit):
-##        raise
-##    except:
-##        traceback.print_exc()
-##
-##    # Close the connection
-##
-##    try:
-##        clientsock.close()
-##    except KeyboardInterrupt:
-##        raise
-##    except:
-##        traceback.print_exc()
 

@@ -21,7 +21,9 @@ limitations under the License.
 import math
 from pprint import pprint
 import random
+
 from planet import Planet
+import utils
 
 planetcodes = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -121,6 +123,55 @@ class Galaxy:
                 self.Distances[(id_1, id_2)] = dist
                 self.Distances[(id_2, id_1)] = dist
 
-    def connectallstars(self):
-        "Make sure all stars are connected to the core"
-        pass
+    def ConnectAllStars(self, init_only=False):
+        """Make sure all stars are connected to the core"""
+        # The original start distribution allows stars to be disconnected from the rest, stranding players.
+        # Fix this by forcing all stars to be within standard jump range of a system in the "core"; such
+        # a planet is also in the core.
+        # First step: add
+        self.FindClosestToCentre()
+        if len(self.Core) == 0 or self.Core[0] is None:
+            # Empty galaxy?
+            return
+        self.NonCore = self.PlanetList[:]
+        self.NonCore.remove(self.Core[0])
+        if init_only:
+            return
+        while len(self.NonCore) > 0:
+            # If we reach this point, we only have planets that cannot reach the core
+            self.RunOneStepOfConnection()
+
+
+    def RunOneStepOfConnection(self):
+        """
+        Connection algorithm.
+        Break out this single step for testing
+        """
+        shiprange = utils.getglobals()["ShipRange"]
+        # first: look to see if we can connect to core without moving planets
+        moved = []
+        for p in self.NonCore:
+            for core_p in self.Core:
+                if utils.calcdist(p, core_p) <= shiprange:
+                    moved.append(p)
+                    self.Core.append(p)
+                    break
+        # Did we move any planets? If so, try another pass
+        if len(moved) > 0:
+            for p in moved:
+                self.NonCore.remove(p)
+            return
+            # Only move one planet at a time
+
+
+    def FindClosestToCentre(self):
+        self.Core = []
+        shortest_dist = 10. * self.GalaxySize
+        closest = None
+        centre = Planet.FromString('x=0.;y=0.')
+        distances = [utils.calcdist(p, centre) for p in self.PlanetList]
+        for i in range(0, len(distances)):
+            if distances[i] < shortest_dist:
+                shortest_dist = distances[i]
+                closest = self.PlanetList[i]
+        self.Core = [closest, ]
