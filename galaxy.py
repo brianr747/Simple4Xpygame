@@ -37,9 +37,11 @@ class Galaxy:
         self.Distances = {}
         self.NeutralPlayer = neutralplayer
         self.PopulateGalaxy()
-        self.CalculateDistances()
         self.NumTries = 0
         self.Core = []
+        self.ConnectAllStars()
+        # Only calculate the distances after ConnectAllStars(), since they can be moved.
+        self.CalculateDistances()
 
     def Dump(self):
         pprint("Galaxy---------------------")
@@ -54,6 +56,8 @@ class Galaxy:
                 for p in self.PlanetList:
                     if (x == int(p.x / 10)) and (y == int(p.y / 10)):
                         tmp = p.PlanetCode
+                        if p not in self.Core:
+                            tmp = "?"
                 lline = lline + tmp
             print lline
         pprint("End Galaxy----------------")
@@ -141,13 +145,14 @@ class Galaxy:
             # If we reach this point, we only have planets that cannot reach the core
             self.RunOneStepOfConnection()
 
-
     def RunOneStepOfConnection(self):
         """
         Connection algorithm.
         Break out this single step for testing
         """
         shiprange = utils.getglobals()["ShipRange"]
+        if len(self.NonCore) == 0:
+            return
         # first: look to see if we can connect to core without moving planets
         moved = []
         for p in self.NonCore:
@@ -156,12 +161,33 @@ class Galaxy:
                     moved.append(p)
                     self.Core.append(p)
                     break
-        # Did we move any planets? If so, try another pass
+        # Did we move any planets? If so, ready for another pass
         if len(moved) > 0:
             for p in moved:
                 self.NonCore.remove(p)
             return
-            # Only move one planet at a time
+        # Only move one planet at a time
+        closest = 1000.* shiprange
+        closestinfo = (None,None)
+        for p_out in self.NonCore:
+            for p_in in self.Core:
+                dist = utils.CalcDist(p_out, p_in)
+                if dist < closest:
+                    closestinfo = (p_out, p_in)
+                    closest = dist
+        p_out, p_in = closestinfo
+        # Need to move p_out
+        # Calculate the unit vector that points from p_in to p_out, then multiply
+        # that vector by the shiprange. Putting p_out at the end of that vector ensures
+        # that it is in range.
+        unit_x = (p_out.x - p_in.x)/closest
+        unit_y = (p_out.y - p_in.y)/closest
+        delta = .95 * shiprange # Multiply by .95 so that we have wiggle room for rounding
+        p_out.x = round(p_in.x + delta * unit_x,1)
+        p_out.y = round(p_in.y + delta * unit_y,1)
+        assert(utils.CalcDist(p_in,p_out) < shiprange)
+        self.Core.append(p_out)
+        self.NonCore.remove(p_out)
 
 
     def FindClosestToCentre(self):

@@ -30,8 +30,9 @@ class TestGalaxy(TestCase):
     @staticmethod
     def CreateGalaxy():
         g = galaxy.Galaxy(100, numplanets=3, neutralplayer=3)
-        planets = ['ID=0;x=150;y=12', 'ID=1;x=55;y=5.5',
-                   'ID=2;x=2;y=3', 'ID=3;x=170;y=0', 'ID=4;x=10;y=3']
+        planets = ['ID=0;x=150;y=12;PlanetCode=a', 'ID=1;x=55;y=5.5;PlanetCode=b',
+                   'ID=2;x=2;y=3;PlanetCode=c', 'ID=3;x=170;y=0;PlanetCode=d',
+                   'ID=4;x=10;y=3;PlanetCode=e']
         planets = [Planet.FromString(x) for x in planets]
         g.PlanetList = planets
         return g
@@ -65,25 +66,54 @@ class TestGalaxy(TestCase):
         obj.FindClosestToCentre()
         self.assertEqual(obj.Core, [obj.PlanetList[2]])
 
-    def test_ConnectAllStars(self):
+    def test_ConnectAllStars_init(self):
         obj = TestGalaxy.CreateGalaxy()
         obj.ConnectAllStars(init_only=True)
         self.assertEqual(obj.Core,[obj.PlanetList[2]])
 
     def test_RunOneStepOfConnection(self):
         obj = TestGalaxy.CreateGalaxy()
+        # obj.Dump()
         obj.ConnectAllStars(init_only=True)
         self.assertEqual(obj.Core,[obj.PlanetList[2]])
         obj.RunOneStepOfConnection()
+        # obj.Dump()
         IDs = [p.ID for p in obj.Core]
         self.assertEqual(IDs, [2, 4])
         obj.RunOneStepOfConnection()
+        # obj.Dump()
         IDs = [p.ID for p in obj.Core]
         # pick up a planet
         self.assertEqual(IDs, [2, 4, 1])
+        # obj.Dump()
+        #
+        # This is the step where we move the planet
+        # Validate initial position (from creation script)
+        self.assertEqual(obj.PlanetList[0].x, 150.)
+        self.assertEqual(obj.PlanetList[0].y, 12.)
         obj.RunOneStepOfConnection()
+        self.assertEqual(obj.PlanetList[0].x, 102.4)
+        self.assertEqual(obj.PlanetList[0].y, 8.7)
         IDs = [p.ID for p in obj.Core]
-        self.assertEqual(IDs, [2, 4, 1])
+        self.assertEqual(IDs, [2, 4, 1, 0])
+        obj.RunOneStepOfConnection()
+        # obj.Dump()
+        IDs = [p.ID for p in obj.Core]
+        self.assertEqual(IDs, [2, 4, 1, 0, 3])
+        self.assertEqual(obj.PlanetList[0].x, 102.4)
+        self.assertEqual(obj.PlanetList[0].y, 8.7)
+
+    def test_ConnectAllStars_all(self):
+        obj = TestGalaxy.CreateGalaxy()
+        # obj.Dump()
+        obj.ConnectAllStars(init_only=False)
+        # Should have same final result from steo-by-step test
+        IDs = [p.ID for p in obj.Core]
+        self.assertEqual(IDs, [2, 4, 1, 0, 3])
+        self.assertEqual(obj.PlanetList[0].x, 102.4)
+        self.assertEqual(obj.PlanetList[0].y, 8.7)
+
+
 
 
 

@@ -348,7 +348,7 @@ class Game:
                 f_list[0].Ships += prod
 
     def OrderMoveFleet(self, playerID, fleetID, target_planet):
-        "returns stringif error; none otherwise"
+        "returns string if error; none otherwise"
         pos = -1
         for i in range(0, len(self.FleetList)):
             if fleetID == self.FleetList[i].ID:

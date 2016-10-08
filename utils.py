@@ -45,3 +45,4 @@ def getglobals():
     out = dict(ShipRange=50.)
     return out
 
+
