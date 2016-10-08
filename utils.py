@@ -41,3 +41,7 @@ def ParseCommString(s):
     except:
         raise ValueError("Parse error")
 
+def getglobals():
+    out = dict(ShipRange=50.)
+    return out
+

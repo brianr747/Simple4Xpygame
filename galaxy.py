@@ -152,7 +152,7 @@ class Galaxy:
         moved = []
         for p in self.NonCore:
             for core_p in self.Core:
-                if utils.calcdist(p, core_p) <= shiprange:
+                if utils.CalcDist(p, core_p) <= shiprange:
                     moved.append(p)
                     self.Core.append(p)
                     break
@@ -169,7 +169,7 @@ class Galaxy:
         shortest_dist = 10. * self.GalaxySize
         closest = None
         centre = Planet.FromString('x=0.;y=0.')
-        distances = [utils.calcdist(p, centre) for p in self.PlanetList]
+        distances = [utils.CalcDist(p, centre) for p in self.PlanetList]
         for i in range(0, len(distances)):
             if distances[i] < shortest_dist:
                 shortest_dist = distances[i]

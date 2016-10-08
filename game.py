@@ -407,7 +407,7 @@ class Game:
             if f.AtPlanetID <> -1:
                 continue
             targ_planet = self.Galaxy.PlanetList[f.TargetID]
-            dist = utils.calcdist(targ_planet, f)
+            dist = utils.CalcDist(targ_planet, f)
             speed = self.PlayerList[f.PlayerID].ShipSpeed
             if dist <= speed:
                 # f_list = self.FindFleetsAtPlanet(targ_planet.ID,f.PlayerID)
@@ -423,7 +423,7 @@ class Game:
             else:
                 delta_x = float(targ_planet.x - f.x)
                 delta_y = float(targ_planet.y - f.y)
-                tot = utils.calcdist(f, targ_planet)
+                tot = utils.CalcDist(f, targ_planet)
                 # Unit vector = delta/(tot)
                 # movement = speed*unit vector
                 f.x += speed * delta_x / tot

@@ -18,7 +18,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import combat
 
 from game import Fleet
 from combat import Combat
@@ -47,7 +46,7 @@ def main():
     for seed in range(0,1000):
         f1 = CreateFleet1()
         f2 = CreateFleet2()
-        batlle = Combat(seed,[f1,f2])
+        battle = Combat(seed, [f1, f2])
         battle.HitLevel=400
         battle.RunCombat(run_one_step=False)
         out = battle.OutFleets[0]
