@@ -18,6 +18,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import time
+
 from clients.baseAI import BaseAI1
 
 
@@ -33,6 +35,8 @@ class AIDeliberate1(BaseAI1):
         self.CalcDistances()
         self.CalculateInRange()
         self.CalcShipsAtPlanet()
+        # Slow the sequence down, so that the client can render
+        time.sleep(1.)
         
        # Create the "high priority planets" for where to send ships
        # Start out with border planets

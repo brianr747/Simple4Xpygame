@@ -29,8 +29,10 @@ import networkclient
 from common.planet import Planet
 from common.fleet import Fleet
 
+
 class MessageError(ValueError):
     pass
+
 
 class ConsoleClient(object):
     def __init__(self):
@@ -44,6 +46,7 @@ class ConsoleClient(object):
         self.GameState = '?'
         self.PlanetList = []
         self.FleetList = []
+        self.IsObserver = False
 
     def Join(self):
         if self.State != 'Starting':
@@ -53,6 +56,7 @@ class ConsoleClient(object):
         else:
             self.CommunicationClient = networkclient.NetworkClient()
         self.CommunicationClient.MessageHandler = self.MessageHandlerBase
+        self.CommunicationClient.IsObserver = self.IsObserver
         self.CommunicationClient.Join()
         for i in range(0, 10):
             self.CommunicationClient.DoNetwork()
@@ -72,6 +76,8 @@ class ConsoleClient(object):
         if msg.lower().startswith("state"):
             msg = msg.split(":")
             self.GameState = msg[1]
+            if len(msg) < 3:
+                return
             turn = msg[2].split("=")
             assert(turn[0].lower() == 'turn')
             self.GameTurn = int(turn[1])
@@ -81,7 +87,6 @@ class ConsoleClient(object):
                 self.LastTurn = self.GameTurn
                 self.CommunicationClient.SendMessage("?PLANETS")
                 self.CommunicationClient.SendMessage("?FLEETS")
-
             return
         if msg.startswith("PLANETS|"):
             if msg[-1] == '|':
@@ -146,6 +151,15 @@ class ConsoleClient(object):
                 self.PrintFleets()
                 continue
             self.CommunicationClient.SendMessage(opt)
+
+
+class ConsoleObserver(ConsoleClient):
+    def __init__(self):
+        super(ConsoleObserver, self).__init__()
+        self.IsObserver = True
+
+
+
 
 
 

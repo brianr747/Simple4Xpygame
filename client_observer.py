@@ -18,7 +18,6 @@ limitations under the License.
 
 import time
 import traceback
-
 import pygame
 
 from common import mynetwork
@@ -120,6 +119,8 @@ class ObserverUIClient(mynetwork.SingleLineMasterClient):
         if self.Font is None:
             return
         scaling = 4
+        msg = self.State + "  Client to observe game. Once started, mouse buttons cycle through players' views."
+        label = self.Font.render(msg, 0, (255, 255, 0))
         if not self.DecoratorsCalculated:
             self.CalculateDecorators()
         for p in self.PlanetList:
@@ -171,9 +172,9 @@ class ObserverUIClient(mynetwork.SingleLineMasterClient):
 
     def main(self):
         pygame.init()
-##        print pygame.display.list_modes(32)
-##        a = raw_input("Hit return")
-##        
+#        print pygame.display.list_modes(32)
+#        a = raw_input("Hit return")
+#
         self.Screen = pygame.display.set_mode(SCREENSIZE)
         self.Font = pygame.font.SysFont("Courier",12)
         pygame.display.set_caption("ObserverClient1.py")
@@ -194,33 +195,23 @@ class ObserverUIClient(mynetwork.SingleLineMasterClient):
         
         cnt = 1
         # Need to initialize this...
-        FPS = 30
         msg = self.State + "  Client to observe game. Once started, mouse buttons cycle through players' views."
         label = self.Font.render(msg, 0, (255, 255, 0))
+        cnt = 0
         while keepGoing:
-            tick = clock.tick()
-            cnt = cnt + 1
-            # Run this update roughly once per second
-            if cnt > FPS:
-                FPS = clock.get_fps()
-                cnt = 1
-                if FPS > 40:
-                    SleepTime += 1
-                elif FPS < 20:
-                    SleepTime = 2
-                elif FPS < 35:
-                    SleepTime -= 1
-                    # Always yield for at least 2 millisecs...
-                    SleepTime = max(2,SleepTime)
-                sleep_percent = .1*(SleepTime*FPS)  # 100*(t/(1000/FPS))
+            clock.tick()
+            cnt += 1
+            if cnt % 10 == 0:
                 self.sendserver("?STATE")
-                msg = self.State + "  Client to observe game. Once started, mouse buttons cycle through players' views."
-                label = self.Font.render(msg, 0, (255, 255, 0))
+            if cnt == 100:
+                FPS = clock.get_fps()
+                print "FPS =", FPS
+                cnt = 0
+
             # Wait is less accurate than other timers, _BUT_ it actually
             # sleeps the process, so that we keep our CPU usage bounded.
-            pygame.time.wait(SleepTime)
+            pygame.time.wait(20)
             self.network_events()
-
             # Process pygame events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:

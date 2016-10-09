@@ -19,6 +19,7 @@ class NetworkClient(mynetwork.SingleLineMasterClient):
         super(NetworkClient, self).__init__()
         self.State = "Lobby"
         self.PlayerNumber = None
+        self.IsObserver = False
         self.FromServer = []
         self.ToServer = []
         self.MessageHandler = NetworkClient.DefaultMessageHandler
@@ -29,8 +30,15 @@ class NetworkClient(mynetwork.SingleLineMasterClient):
 
     def Join(self):
         self.network_events()
-        self.sendserver("?PLAYERS")
-        self.State = "Joining"
+        if self.IsObserver:
+            self.sendserver("Join-Observer")
+            if self.PlayerNumber is None:
+                self.PlayerNumber = 0
+                self.sendserver("OBSERVE_AS=%i" % (self.PlayerNumber,))
+                self.State = 'In Game'
+        else:
+            self.sendserver("?PLAYERS")
+            self.State = "Joining"
 
     def handler_message(self, msg, fileno):
         if self.State == 'Joining':
@@ -83,8 +91,6 @@ class NetworkClient(mynetwork.SingleLineMasterClient):
         while len(self.FromServer) > 0:
             msg = self.FromServer.pop(0)
             self.MessageHandler(msg)
-
-
 
 
 class MockNetworkClient(object):
