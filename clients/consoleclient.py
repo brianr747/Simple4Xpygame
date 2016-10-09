@@ -129,19 +129,22 @@ class ConsoleClient(object):
         self.Join()
         self.GetStateInfo()
         while True:
+            self.CommunicationClient.SendMessage('?STATE')
             self.CommunicationClient.DoNetwork()
             self.PrintState()
             opt = raw_input("Option? [?=help]> ")
             opt = opt.strip()
             if opt == '?':
-                pprint("""
+                print """
  Options:
  q = quit
  p = print planet list
  f = print fleet list
+ d = done turn
  [empty string] = do nothing; process any network messages.
  Otherwise -> string sent to server as is.
-""")
+"""
+                continue
             if opt.lower() == 'q':
                 break
             if opt.lower() == 'p':
@@ -150,7 +153,52 @@ class ConsoleClient(object):
             if opt.lower() == 'f':
                 self.PrintFleets()
                 continue
+            if opt.lower() == 'd':
+                self.CommunicationClient.SendMessage('FINISHED')
+                self.CommunicationClient.DoNetwork()
+                continue
+            if opt.startswith('m '):
+                try:
+                    self.DoMove(opt)
+                except ValueError:
+                    print 'Invalid command'
+                self.CommunicationClient.SendMessage('?FLEETS')
+                continue
             self.CommunicationClient.SendMessage(opt)
+
+    def FindPlanetFromCode(self, code):
+        for p in self.PlanetList:
+            if code == p.PlanetCode:
+                return p
+        raise KeyError('No matching planet')
+
+    def FindFleetAtPlanet(self,p):
+        for f in self.FleetList:
+            if f.AtPlanetID == p.ID:
+                return f
+        raise KeyError('No fleet at planet')
+
+
+    def DoMove(self,msg):
+        msg = msg.strip()
+        msg = msg.split(" ")
+        if len(msg) < 3:
+            raise ValueError('Bad format')
+        src = msg[1]
+        dest = msg[2]
+        try:
+            p_src = self.FindPlanetFromCode(src)
+            fleet = self.FindFleetAtPlanet(p_src)
+        except KeyError:
+            raise ValueError('Not a known source planet; or no fleet')
+        try:
+            p_dest = self.FindPlanetFromCode(dest)
+        except KeyError:
+            raise ValueError('Not a known dest planet')
+        msg = "MOVE;%i;%i" % (fleet.ID, p_dest.ID)
+        print msg
+        self.CommunicationClient.SendMessage(msg)
+        self.CommunicationClient.DoNetwork()
 
 
 class ConsoleObserver(ConsoleClient):

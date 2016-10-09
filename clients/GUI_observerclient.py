@@ -16,8 +16,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import time
-import traceback
 import pygame
 
 import consoleclient
@@ -70,7 +68,7 @@ class GUI_ObserverClient(consoleclient.ConsoleObserver):
             self.CommunicationClient.DoNetwork()
             # Wait is less accurate than other timers, _BUT_ it actually
             # sleeps the process, so that we keep our CPU usage bounded.
-            pygame.time.wait(20)
+            pygame.time.wait(30)
             # Process pygame events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -90,28 +88,51 @@ class GUI_ObserverClient(consoleclient.ConsoleObserver):
     def RenderPlanets(self):
         if self.Font is None:
             return
-        msg = self.State + "  Client to observe game. Once started, mouse buttons cycle through players' views."
+        msg = self.State + "  Client to observe game. Once started, mouse buttons cycle through players' views. SPACE = view hyperspace"
         label = self.Font.render(msg, 0, (255, 255, 0))
         self.Screen.blit(label, (10, 10))
+        if pygame.key.get_pressed()[pygame.K_SPACE]:
+            for f in self.FleetList:
+                if not f.AtPlanetID == -1:
+                    continue
+                ID = f.PlayerID
+                if ID is None:
+                    color = self.UnknownColor
+                else:
+                    color = self.Colors[ID]
+                label = self.Font.render(str(f.Ships), 0, color)
+                pos = self.mapxy(f)
+                self.Screen.blit(label, pos)
+            return
         for p in self.PlanetList:
             ID = p.PlayerID
             if ID is None:
                 color = self.UnknownColor
             else:
                 color = self.Colors[ID]
-            label = self.Font.render(p.PlanetCode, 0, color)
+            prod = p.Production
+            if prod is None:
+                prod = ""
+            else:
+                prod = " [%.0f]" % (prod,)
+            ships = ''
+            for f in self.FleetList:
+                if f.AtPlanetID == p.ID:
+                    ships = str(f.Ships)
+            msg = p.PlanetCode + prod + ships
+            label = self.Font.render(msg, 0, color)
             pos = self.mapxy(p)
             self.Screen.blit(label, pos)
-        for f in self.FleetList:
-            ID = f.PlayerID
-            if ID is None:
-                color = self.UnknownColor
-            else:
-                color = self.Colors[ID]
-            label = self.Font.render(str(f.Ships), 0, color)
-            pos = self.mapxy(f)
-            self.Screen.blit(label, pos)
-            # print pos,str(f.Ships),color
+        # for f in self.FleetList:
+        #     ID = f.PlayerID
+        #     if ID is None:
+        #         color = self.UnknownColor
+        #     else:
+        #         color = self.Colors[ID]
+        #     label = self.Font.render(str(f.Ships), 0, color)
+        #     pos = self.mapxy(f)
+        #     self.Screen.blit(label, pos)
+        #     # print pos,str(f.Ships),color
 
     @staticmethod
     def mapxy(obj):
