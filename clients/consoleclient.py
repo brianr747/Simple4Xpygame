@@ -23,6 +23,7 @@ limitations under the License.
 """
 
 import time
+from pprint import pprint
 
 import networkclient
 from common.planet import Planet
@@ -83,6 +84,9 @@ class ConsoleClient(object):
 
             return
         if msg.startswith("PLANETS|"):
+            if msg[-1] == '|':
+                # if we have a trailing |, kill it!
+                msg = msg[:-1]
             msg = msg.split("|")
             msg.pop(0)
             self.PlanetList = [Planet.FromString(s) for s in msg]
@@ -95,21 +99,25 @@ class ConsoleClient(object):
             msg.pop(0)
             self.FleetList = [Fleet.FromString(s) for s in msg]
             return
-        print msg
+        self.MessageHandler(msg)
+
+    def MessageHandler(self, msg):
+        """Override in derived classes"""
+        pprint("Unhandled message: " + msg)
 
     def PrintState(self):
         print "State:", self.State, "Game State:", self.GameState, "GameTurn:", self.GameTurn, "LastTurn:", self.LastTurn
 
     def PrintPlanets(self):
-        print "Planet Dump"
+        pprint('Planet Dump')
         for p in self.PlanetList:
             msg  = "[Player_%02i] %02i %s %.1f,%.1f" % (p.PlayerID, p.ID, p.PlanetCode, p.x, p.y)
-            print msg
+            pprint(msg)
 
     def PrintFleets(self):
-        print "Fleet Dump"
+        pprint('Fleet Dump')
         for p in self.FleetList:
-            print p.ToString()
+            pprint(p.ToString())
 
 
     def main(self):
@@ -118,7 +126,17 @@ class ConsoleClient(object):
         while True:
             self.CommunicationClient.DoNetwork()
             self.PrintState()
-            opt = raw_input("Option? > ")
+            opt = raw_input("Option? [?=help]> ")
+            opt = opt.strip()
+            if opt == '?':
+                pprint("""
+ Options:
+ q = quit
+ p = print planet list
+ f = print fleet list
+ [empty string] = do nothing; process any network messages.
+ Otherwise -> string sent to server as is.
+""")
             if opt.lower() == 'q':
                 break
             if opt.lower() == 'p':

@@ -38,6 +38,7 @@ class ObserverUIClient(mynetwork.SingleLineMasterClient):
         self.PlayerNumber = 0
         self.PlanetList = []
         self.FleetList = []
+        self.DecoratorsCalculated = False
         self.Font = None
         self.Colors = ((255,0,0),
                        (0,255,0),
@@ -56,7 +57,8 @@ class ObserverUIClient(mynetwork.SingleLineMasterClient):
             if not msg == old_state:
                 # All updates needed
                 self.sendserver("?PLANETS")
-                self.sendserver("?FLEETS") 
+                self.sendserver("?FLEETS")
+                self.DecoratorsCalculated = False
             return
         if "PLANETS|" == msg[0:8]:
             #pprint(msg.split("|"))
@@ -76,7 +78,12 @@ class ObserverUIClient(mynetwork.SingleLineMasterClient):
             if not ";" in p:
                 continue         
             planet = Planet.FromString(p)
+            if planet.Production is not None:
+                planet.Production = " [%.0f]" % (planet.Production,)
+            else:
+                planet.Production = ""
             planetinfo.append(planet)
+
         self.PlanetList = planetinfo
 
     def ParseFleets(self,msg):
@@ -94,30 +101,46 @@ class ObserverUIClient(mynetwork.SingleLineMasterClient):
 
     def mapxy(self,obj):
         scaling = 1.5
-        pos = (350 + int(scaling*obj.x),10 + (350 - int(scaling*obj.y)))
+        pos = (350 + int(scaling*obj.x), 10 + (350 - int(scaling*obj.y)))
         return pos
+
+    def CalculateDecorators(self):
+        if len(self.PlanetList) == 0:
+            return
+        if len(self.FleetList) == 0:
+            return
+        for p in self.PlanetList:
+            for f in self.FleetList:
+                if f.AtPlanetID == p.ID:
+                    p.Production += " %i" % (f.Ships,)
+        self.DecoratorsCalculated = True
+
 
     def RenderPlanets(self):
         if self.Font is None:
             return
         scaling = 4
+        if not self.DecoratorsCalculated:
+            self.CalculateDecorators()
         for p in self.PlanetList:
-            ID =p.PlayerID
+            ID = p.PlayerID
             if ID is None:
                 color = self.UnknownColor
             else:
                 color = self.Colors[ID]
-            label = self.Font.render(p.PlanetCode,0,color)
+            label = self.Font.render(p.PlanetCode + p.Production, 0, color)
             pos = self.mapxy(p)
             self.Screen.blit(label,pos)
         scaling = 4
         for f in self.FleetList:
-            ID =f.PlayerID
+            ID = f.PlayerID
+            if self.DecoratorsCalculated and f.AtPlanetID != -1:
+                continue
             if ID is None:
                 color = self.UnknownColor
             else:
                 color = self.Colors[ID]
-            label = self.Font.render(str(f.Ships),0,color)
+            label = self.Font.render(str(f.Ships), 0, color)
             pos = self.mapxy(f)
             self.Screen.blit(label,pos)
             #print pos,str(f.Ships),color
@@ -171,7 +194,7 @@ class ObserverUIClient(mynetwork.SingleLineMasterClient):
         
         cnt = 1
         # Need to initialize this...
-        FPS = 20
+        FPS = 30
         msg = self.State + "  Client to observe game. Once started, mouse buttons cycle through players' views."
         label = self.Font.render(msg, 0, (255, 255, 0))
         while keepGoing:

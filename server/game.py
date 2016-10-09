@@ -251,7 +251,7 @@ class Game:
             player.VisiblePlanets = {}
             for planet in self.Galaxy.PlanetList:
                 if planet.PlayerID == p_id:
-                    player.VisiblePlanets[planet.ID] = (planet.ToString('Planet'), 0.)
+                    player.VisiblePlanets[planet.ID] = (planet.ToString('Ship'), 0.)
                     continue
                 # Otherwise, find range
                 closest = 100000000.

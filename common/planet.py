@@ -38,7 +38,8 @@ class Planet:
         if visibility == "Planet":
             return s
         assert (visibility == 'Ship')
-        s = s + ";Production=%.1f" % (self.Production,)
+        if self.Production is not None:
+            s = s + ";Production=%.1f" % (self.Production,)
         return s
 
     # static method
@@ -56,12 +57,13 @@ class Planet:
     @staticmethod
     def FromString(s):
         self = Planet(-1, "-1")
+        self.Production = None
         info = s.split(";")
         for i in info:
             if "=" not in i:
                 continue
             (name, val) = i.split("=")
-            if name in ('x', 'y'):
+            if name in ('x', 'y', 'Production'):
                 setattr(self, name, (float(val)))
                 continue
             if name in ('PlayerID', 'ID'):
