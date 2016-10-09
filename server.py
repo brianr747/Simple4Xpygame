@@ -76,7 +76,7 @@ class GameServer(mynetwork.SingleLineProtocolServer):
             print self.ObserverList
             return
         if "JOIN" in msg:
-            self.AddPlayer(msg,FileNo)
+            self.AddPlayer(msg, FileNo)
             return
         if msg.startswith("OBSERVE_AS"):
             ID = int(msg[11:]) % self.NumPlayers        
