@@ -17,13 +17,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import math
+import random
 import time
 import traceback
-import random
-import math
 
-import mynetwork
-import game
+from common import mynetwork
+from server import game
 
 
 # import utils

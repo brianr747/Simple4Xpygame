@@ -17,20 +17,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import time
+import traceback
 
-import time,traceback
+from common import mynetwork
 
-import mynetwork
 
 class ObserverClientManual(mynetwork.SingleLineMasterClient):
     "Just add some printing"
     def handler_message(self,msg,FileNo):
         print "Receieved '%s' from %i" % (msg,FileNo)
-        mynetwork.SingleLineMasterClient.handler_message(self,msg,FileNo)
+        mynetwork.SingleLineMasterClient.handler_message(self, msg, FileNo)
 
     def sendmessage(self,FileNo,msg):
         print "Sent %i '%s'" % (FileNo,msg)
-        mynetwork.SingleLineProtocolServer.sendmessage(self,FileNo,msg)
+        mynetwork.SingleLineProtocolServer.sendmessage(self, FileNo, msg)
         
 if __name__ == '__main__':
     client = ObserverClientManual()

@@ -15,15 +15,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-from pprint import pprint
+
+import time
+import traceback
 
 import pygame
-from pygame.locals import *
-import time,traceback
 
-import mynetwork
-from game import Planet
-from fleet import Fleet
+from common import mynetwork
+from common.fleet import Fleet
+from server.game import Planet
 
 BACKGROUND = (0,0,0)
 SCREENSIZE = (800,600)
@@ -67,7 +67,7 @@ class ObserverUIClient(mynetwork.SingleLineMasterClient):
             self.ParseFleets(msg)
             return
         
-        mynetwork.SingleLineMasterClient.handler_message(self,msg,FileNo)
+        mynetwork.SingleLineMasterClient.handler_message(self, msg, FileNo)
 
     def ParsePlanets(self,msg):
         plist = msg.split("|")
@@ -144,7 +144,7 @@ class ObserverUIClient(mynetwork.SingleLineMasterClient):
 
     def sendmessage(self,FileNo,msg):
         #print "Sent %i '%s'" % (FileNo,msg)
-        mynetwork.SingleLineProtocolServer.sendmessage(self,FileNo,msg)
+        mynetwork.SingleLineProtocolServer.sendmessage(self, FileNo, msg)
 
     def main(self):
         pygame.init()

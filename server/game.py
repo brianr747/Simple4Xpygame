@@ -17,15 +17,13 @@ limitations under the License.
 
 """
 
-from pprint import pprint
 import random
-import math
+from pprint import pprint
 
-import utils
-import combat
-from galaxy import Galaxy
-from fleet import Fleet
-from planet import Planet
+from common import utils, combat
+from common.fleet import Fleet
+from common.planet import Planet
+from server.galaxy import Galaxy
 
 
 # class Planet:

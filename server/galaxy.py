@@ -17,13 +17,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-
 import math
-from pprint import pprint
 import random
+from pprint import pprint
 
-from planet import Planet
-import utils
+from common import utils
+from common.planet import Planet
 
 planetcodes = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -185,7 +184,7 @@ class Galaxy:
         delta = .95 * shiprange # Multiply by .95 so that we have wiggle room for rounding
         p_out.x = round(p_in.x + delta * unit_x,1)
         p_out.y = round(p_in.y + delta * unit_y,1)
-        assert(utils.CalcDist(p_in,p_out) < shiprange)
+        assert(utils.CalcDist(p_in, p_out) < shiprange)
         self.Core.append(p_out)
         self.NonCore.remove(p_out)
 

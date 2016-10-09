@@ -18,10 +18,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-
-from game import Fleet
-from combat import Combat
-
+from common.combat import Combat
+from server.game import Fleet
 
 
 def CreateFleet1():

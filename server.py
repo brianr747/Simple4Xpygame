@@ -17,14 +17,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-
-import mynetwork
+import time
+import traceback
 from pprint import pprint
-import socket, traceback, time,select,threading
 
+from common import utils, mynetwork
+from server.game import Game
 
-from game import Game
-import utils
 
 class GameServer(mynetwork.SingleLineProtocolServer):
     "Game server"

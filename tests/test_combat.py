@@ -1,7 +1,7 @@
 import unittest
 
-from combat import Combat
-from fleet import Fleet
+from common.combat import Combat
+from common.fleet import Fleet
 
 
 class TestCombat(unittest.TestCase):

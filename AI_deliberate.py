@@ -18,12 +18,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-
-import time,traceback
-import random
-import math
-
-from baseAI import BaseAI1
+from clients.baseAI import BaseAI1
 
 
 class AIDeliberate1(BaseAI1):
