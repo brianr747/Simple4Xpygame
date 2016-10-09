@@ -22,66 +22,114 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from common import mynetwork
+import time
 
+import networkclient
+from common.planet import Planet
+from common.fleet import Fleet
 
-class ClientNetwork(mynetwork.SingleLineMasterClient):
-    """
-    ClientNetwork
-    Implements the network interface for the client. May be reused by other clients.
+class MessageError(ValueError):
+    pass
 
-    Until we create a server stub, no unit test coverage possible.
-    """
-
+class ConsoleClient(object):
     def __init__(self):
-        super(ClientNetwork, self).__init__()
-        self.State = "Lobby"
-        self.PlayerNumber = None
-        self.FromServer = []
-        self.ToServer = []
-
-    def network_events(self):
-        super(self, ClientNetwork).network_events()
+        "Set up without communicating to server"
+        # Use the MockClient to help code lookup, but it does not connect
+        self.CommunicationClient = networkclient.MockNetworkClient()
+        self.State = 'Starting'
+        self.DoMock = False
+        self.LastTurn = -1
+        self.GameTurn = -2
+        self.GameState = '?'
+        self.PlanetList = []
+        self.FleetList = []
 
     def Join(self):
-        self.sendserver("?PLAYERS")
-        self.State = "Joining"
+        if self.State != 'Starting':
+            raise ValueError('Already joined!')
+        if self.DoMock:
+            self.CommunicationClient = networkclient.MockNetworkClient()
+        else:
+            self.CommunicationClient = networkclient.NetworkClient()
+        self.CommunicationClient.MessageHandler = self.MessageHandlerBase
+        self.CommunicationClient.Join()
+        for i in range(0, 10):
+            self.CommunicationClient.DoNetwork()
+            if self.CommunicationClient.State == 'In Game':
+                self.State = self.CommunicationClient.State
+                return
+            time.sleep(.1)
+        self.State = self.CommunicationClient.State
+        raise ValueError('Attempt to connect to server timed out.')
 
-    def handler_message(self, msg, fileno):
-        if self.State == 'JOINING':
-            if msg.startswith("PLAYERS,"):
-                msg = msg.split(",")
-                # Remove first entry = "PLAYERS,"
-                msg.pop(0)
-                player_connected = [x == "True" for x in msg]
-                # print player_connected
-                if False not in player_connected:
-                    raise ValueError("Too many players")
-                response = ""
-                for i in range(0, len(player_connected)):
-                    if not player_connected[i]:
-                        response = "JOIN-%i" % (i,)
-                        self.sendserver(response)
-                        return
-            if msg.startswith('CONNECTED:'):
-                msg = msg.split("=")
-                self.PlayerNumber = int(msg[1])
-                self.State = "In Game"
-            return
-        if self.State == 'In Game':
-            self.FromServer.append(msg)
-            return
+    def GetStateInfo(self):
+        self.CommunicationClient.SendMessage("?STATE")
+        self.CommunicationClient.SendMessage("?PLANETS")
+        self.CommunicationClient.SendMessage("?FLEETS")
 
-    def DoNetwork(self):
-        """Call this to clear up all network tasks"""
-        # Empty all outgoing messages
-        for p in self.ToServer:
-            if not type(p) == str:
-                # No unicode?
-                raise ValueError("Inputs must be strings")
-            p.strip()
-            if '\n' in p:
-                raise ValueError("No \\n characters in messages!")
-            self.sendserver(p)
-        self.ToServer = []
-        self.network_events()
+    def MessageHandlerBase(self, msg):
+        if msg.lower().startswith("state"):
+            msg = msg.split(":")
+            self.GameState = msg[1]
+            turn = msg[2].split("=")
+            assert(turn[0].lower() == 'turn')
+            self.GameTurn = int(turn[1])
+            if self.GameTurn > self.LastTurn:
+                self.PlanetList = []
+                self.FleetList = []
+                self.LastTurn = self.GameTurn
+                self.CommunicationClient.SendMessage("?PLANETS")
+                self.CommunicationClient.SendMessage("?FLEETS")
+
+            return
+        if msg.startswith("PLANETS|"):
+            msg = msg.split("|")
+            msg.pop(0)
+            self.PlanetList = [Planet.FromString(s) for s in msg]
+            return
+        if msg.startswith("FLEETS|"):
+            if msg[-1] == '|':
+                # if we have a trailing |, kill it!
+                msg = msg[:-1]
+            msg = msg.split("|")
+            msg.pop(0)
+            self.FleetList = [Fleet.FromString(s) for s in msg]
+            return
+        print msg
+
+    def PrintState(self):
+        print "State:", self.State, "Game State:", self.GameState, "GameTurn:", self.GameTurn, "LastTurn:", self.LastTurn
+
+    def PrintPlanets(self):
+        print "Planet Dump"
+        for p in self.PlanetList:
+            msg  = "[Player_%02i] %02i %s %.1f,%.1f" % (p.PlayerID, p.ID, p.PlanetCode, p.x, p.y)
+            print msg
+
+    def PrintFleets(self):
+        print "Fleet Dump"
+        for p in self.FleetList:
+            print p.ToString()
+
+
+    def main(self):
+        self.Join()
+        self.GetStateInfo()
+        while True:
+            self.CommunicationClient.DoNetwork()
+            self.PrintState()
+            opt = raw_input("Option? > ")
+            if opt.lower() == 'q':
+                break
+            if opt.lower() == 'p':
+                self.PrintPlanets()
+                continue
+            if opt.lower() == 'f':
+                self.PrintFleets()
+                continue
+            self.CommunicationClient.SendMessage(opt)
+
+
+
+
+

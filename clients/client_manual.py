@@ -32,8 +32,9 @@ class ObserverClientManual(mynetwork.SingleLineMasterClient):
     def sendmessage(self,FileNo,msg):
         print "Sent %i '%s'" % (FileNo,msg)
         mynetwork.SingleLineProtocolServer.sendmessage(self, FileNo, msg)
-        
-if __name__ == '__main__':
+
+
+def main():
     client = ObserverClientManual()
     # Have to run this to get the connection set up
     client.network_events() 
