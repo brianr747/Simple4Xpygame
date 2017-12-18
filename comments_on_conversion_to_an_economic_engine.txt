@@ -1,0 +1,197 @@
+Conversion to an Economic Engine
+================================
+
+Brian Romanchuk
+2017-12-17
+
+Objective
+---------
+
+Create a financial/economic simulator, as described in
+http://www.bondeconomics.com/2017/12/comments-on-structuring-agent-based.html
+
+The simulator could be used as a research tool, or as an economic engine for hobbyist
+game developers.
+
+Structure
+---------
+
+The economy would consist of a number of exchanges, each associated with a "real economy."
+
+There will be one class of agents -- called firms here -- that primarily act through exchanges.
+They will buy and sell commodities, and possibly run extraction and manufacturing industries that are
+run by robots. (Those who are interested in simulations closer to the real world will skip the robots.)
+These firms would be run by players if the simulation is a game.
+
+The "real economy" will consist of households (that provide labour) and "real economy firms" that
+employ labour inputs into extraction and manufacturing. The wages that they pay will go to households,
+who then purchase goods and services at retail firms. The real economy firms will also buy and sell wholesale
+at the same markets as firms.
+
+The key difference between the real economy and the markets is the time scale. Trading on exchanges is fast,
+while wages and retail consumption are slow-moving.
+
+The interaction with the exchanges would look like standard agent-based modelling: all transactions are
+simulated, and occur based on the decisions of the agents (firms).
+
+The real economy transactions are slow-moving and aggregated. The aggregate transactions would be implemented
+as irregular bursts within a longer accounting interval (monthly, quarterly). The aggregate flows would
+follow rules similar to that of a stock-flow consistent (SFC) model. Pricing would be set as in post-Keynesian
+theory: selling prices are a markup over input costs. The exchanges provide price signals that allow firms
+to determine their input costs (which is the obvious problem with the markup description of pricing).
+
+The advantage of this structure is that price-setting is done in as realistic a fashion as possible. This is
+probably an advance over SFC models, and miles ahead of asserting that prices have to equal the marginal
+product of something or another.
+
+Backstory
+---------
+
+The cleanest believable backstory for this simulation is that this is space-trading game. The exchanges
+are space stations at different planets, and the "real economy" is the economy on the planetary surface.
+
+The players would be space-faring corporations that do not have planetary operations. They could have
+space-based manufacturing and resource extraction. They would use robots, which makes them more efficient
+than planet-based firms. This means that the players (including AI players) will take over the existing
+economy.
+
+For those who want a serious simulation, this backstory will not help. The exchanges could represent cities
+or countries. The problem is that if we are confined to the surface of the Earth, we need to start to
+worry more about geography, etc. If we are in space, all we really have to do is locate points on the (x,y) plane,
+or in a 3-D (x,y,z) space.
+
+Architecture
+------------
+
+The architecture is client-server. This does not mean that we need a dedicated server; we can run the
+client(s) and server on the same machine (they communicate via the loopback port).
+
+The advantages of this approach are many.
+
+- It is possible for developers to work with whatever language they wish; they just ensure that their
+client or server meets the communication protocols.
+- We split the programming tasks into manageable chunks; we can rebuild part of the simulation without
+affecting the others.
+- The key property of such simulations (like any strategy game) is emergent behaviour. We need to run the
+whole simulation to see how components behave; we cannot guess the system behaviour just based on how
+one agent acts. The entire simulation generates a mountain of data that is not easily deciphered; the
+easiest way to see what is going on is to create a client that talks to the server and generates specialised
+data queries.
+- We can develop and discard lightweight clients during development. If we have a single process running
+the simulation, we are largely stuck with iterating on a single interface.
+- If we want a multiplayer game, we need a client-server architecture.
+
+The primary problem with the client-server approach is that it is unfamiliar to most, particularly
+those who do scientific programming. We need a framework that hides the client-server architecture, so
+that programmers can focus on the core algorithms. There is also the related issue that unit testing is
+much more complicated; the best approach would be to create test programs that bake both the client and server
+into a single process, allowing us to debug a single process.
+
+One secondary issue is security. During initial development, the focus would be on running on one computer,
+and so the server can just refuse connections from other machines. If someone wanted to expose a server to
+the internet, someone with security experience would need to watch for vulnerabilities.
+
+Feasibility
+-----------
+
+If I were working full time on this project, I could probably throw together a working prototype within three
+weeks. Since I am not working full time on it, that will not happen.
+
+Although the final behaviour looks extremely complicated, it is the just the union of a bunch of
+relatively simple components. A basic version of each component could be built relatively quickly.
+
+The key issue for such a simulation is that all income flows have to be circular. If we are missing a
+component of the simulation, activity will break down. For example, if firms pay wages, but households
+have no way to spend their wages, firms will have to either stop production or go bankrupt.
+
+The simplest possible loop would be:
+1. Households receive money from somewhere (a basic income?)
+2. They spend at retail firms.
+3. Meanwhile, goods are created at manufacturing firms (by robots?).
+4. The retail firms trade with manufacturing firms at the exchanges.
+
+We then add a labour market so that we no longer have to drop money on households from
+helicopters, and we can get a business cycle.
+
+The objective should be to get a functioning simulation as quickly as possible, and then iterate by adding
+features. Building a too-large project that cannot get the components integrated is a standard way for
+projects to fail.
+
+Exchanges
+---------
+
+Other than "money", all assets on the balance sheets of firms will be bought and sold in exchanges,
+including capital goods.
+
+If we use the space backstory, this can be explained by the capital goods being specialised space ships.
+We can have mining spaceships, and manufacturing spaceships, and even shipyard spaceships. The ships
+would be expensive, but bought and sold like any other good. This means that we can easily put a market
+value on any player's balance sheet.
+
+This is a bit harder to explain for ground-based firms; we cannot exactly relocate mines. Dealing with
+that is a future issue, but would not matter for a game if players are not allowed to own assets on the surface.
+
+Agents will send limit orders to the exchanges. In order to avoid high-frequency trading shenanigans
+(which would crush our processing ability), orders would have to be live for a period of time. Orders
+would be processed one at a time, and either cleared against existing orders, or become a new bid/offer
+in the queue.
+
+The exchange is assumed to be default-free, and offers margin leverage to firms. This will allow
+firms to be able to put up bids that are not backed by cash holdings. If the player is hitting margin
+limits, the exchange will force the player to start liquidating assets. This creates the possibility
+of a debt-deflation, even in the absence of other credit facilities in the simulation.
+
+The only other order type allowed would be a cross-market "fill or kill" order. An agent could send an
+order with a limit price for an exchange of two commodities (commodity A versus Commodity B). This way agents
+could do some relative value/arbitrage trades without getting killed by having the price on one leg move.
+(The assumption is that the markets will be relatively illiquid, with high bid-offer spreads and large
+price jumps.)
+
+At the minimum, we would need spot markets. The simplest extension would to allow for futures trading,
+with two futures contracts (a front contract, and a second). Short positions could be either collateralised
+by inventory of the item, or cash. The shorts would be allowed to deliver into the front contract
+at any time; some procedure for determining which long receives delivery would have to be put in place.
+However, the cash margin will ramp up as we get closer to expiry, to force shorts to cover their
+positions in some fashion. Basically, we do not want to end up with the contract expiring with failures
+to deliver; the exchange would have to declare force majeure and hammer the firm financially that failed
+to deliver. On the other hand, we are less concerned about long futures; the longs can always come up with
+cash courtesy of forced liquidation.
+
+(It is exceedlingly likely that squeezing shorts will be a standard tactic of nefarious agents. We will
+need a mechanism to prevent this from happening in every contract expiry.)
+
+It is extremely likely that the safest way of trading futures would be express quotes as a spread versus spot
+or front future. As a result, that is possibly how the order queue would be structured. In fact,
+such trades match the "fill or kill" spread structure noted earlier.
+
+The advantage of futures trading is that it allows firms to deal with items that take a long time to
+produce. Rather than buy a spaceship in the spot market, one could order one in the second futures market.
+This would provide a signal for the manufacturer to build a ship, in time for delivery into the second
+contract. If we only have spot trading, if a few firms wanted to buy a ship at the same time, it would
+cause a huge price spike if there is not enough inventory. The futures mechanism would allow for a more
+plausible smoothing of price action, and more realistic planning opportunities for manufacturers.
+In the real world, such large capital goods would be directly ordered from manufacturers, and the terms
+would be negotiated one order at a time. Since we want prices set in markets, we cannot implement this.
+Therefore, even though the futures market might look like useless chrome on the simulation, it may
+help believability.
+
+Currencies
+----------
+
+It would be possible to have multiple currencies, but it would be a user interface nightmare. Probably a
+feature that can be held off until the framework is well established.
+
+Communication Standards
+-----------------------
+
+The communication protocol between the clients and server is the key defining characteristic of the system.
+Work on the clients and server can be done completely independently; all that matters is that they adhere to
+the same standard. (The server could be more advanced than the client; all that happens is that the client
+is missing some functionality it could take advantage of.)
+
+If this becomes a multi-programmer project, defining the standard may turn into an important task. However,
+it is probably more important to get a small, functioning version of the simulation before launching
+grandiose expansion plans. It would be easy to write a 80-page communications protocol document -- for
+a project that does not even get 20$% completed.
+
+
