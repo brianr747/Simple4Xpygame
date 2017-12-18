@@ -206,5 +206,72 @@ quickly as possible. This would make the strategies completely inappropriate for
 someone who is interested in the gaming aspects would need to fork the project and push it in a new
 direction.
 
+Real Time and State Information
+-------------------------------
+
+It appears that the biggest initial design problem revolves around the notion of the time axis. If we are
+running an academic simulation, computing time per step is not an issue; the simulation takes as long to
+run as it takes to run. For a game, we want the the flow of game time to be roughly stable when compared to
+clock time. We can hit both objectives by throwing a fast enough CPU at the problem, and slowing the
+academic simulation time as needed.
+
+We need a notion of simulation time that is fixed, and which we can base things like production functions
+and futures expiries on. Probably something simple like futures expire every 1000 time units (clients
+can convert this scale to funky things like "June 3rd, 3013" themselves).
+
+The server is running in an event loop. It will fix the simulation time at the start of the loop, and then
+process events. Even though the events are processed sequentially, they can be treated as being effectively
+simultaneous. The problem is that the processing time varies from time step to step, and so we cannot
+just increment the simulation time each step if we want to track clock time.
+
+The solution is to have the simulation time each step based on elapsed clock time, (up to some limit).
+If we have a slow calculation (or something else freezes the CPU), we just have a simulation time
+jump to make it appear to flow more  smoothly. For example, assume one second = 1 simulation day.
+If Monday's simulation takes two seconds, we jump to Wednesday. (We cannot have too much of a jump;
+if necessary, we have to accept that the simulation appears frozen.) Converting to a pure simulation
+is straightforward: we just do not allow time step jumps to occur (based on some parameter).
+This way, we can hit both modes of use with the same code.
+
+(Very old game code relied on running CPU's as fast as they can, introducing time delays with FOR/NEXT
+loops. This worked if everyone had the same computer and CPU - e.g., Apple II, Vic-20, whatever. This
+broke down in the post-MS-DOS world, where we had much faster CPU's running the same code.)
+
+Real economy events (such as finishing a production process, or paying wages) will be held in a queue,
+ordered by game simulation time. We process all events in the queue that have elapsed. (If we have a time
+jump, it means that we will be processing after the event time. We need to make sure that this is
+accounted for in processing.) Most server processing loops will have no activity; no incoming messages to
+process, and no events. We just put the server process to sleep for a couple milliseconds, and try again.
+
+The tricky part is state information. The main source of inefficiency with a client-server architecture is
+that the server has to send state information to clients. Instead, if all calculation is done in the same
+process, the clients can just read off state information from the copy in the server. However, that
+means that the client and server code are intermingled, and it is very difficult to work on one side
+without hitting the other. Also, we could no longer mix languages. Finally, we have no obvious way to limit
+information flow to clients. Each AI player would have access to all state information in the game,
+creating an obvious advantage over human players.
+
+Note that if we embed some "clients" into the same process (such as AI players), we can just copy state
+information in memory into the client's structure. This would help reduce the socket communication needs. We
+just switch out the source of the information at a low level, and the client code only looks at the
+assembled state information.
+
+My guess is that the best way to start off with state information is:
+(1) The server sends out a minimal broadcast (a message to all clients) every time the simulation
+    time changes. This lets the client know what the simulation time is, so it can start planning
+    for future events.
+(2) The server sends a message associated with transactions to the agents that took part in the transactions.
+(3) Other information - prices, volumes, are done on demand. Clients only update the affected state
+    information.
+
+Later on, we could have clients select particular data sources they are watching, and the server sends
+periodic updates on for those sources. This would reduce the amount of message handling, at the cost of
+complexity. There is no point worrying about efficiency at this stage, and so there is no need to pursue
+the complex solution.
+
+(I started thinking about working on this, and I realised that this state information issue needs to be
+dealt with, as it is a core part of the engine. We need the ability to replicate state information from
+server to client under a number of conditions before we worry about the simulation rules.)
+
+
 
 
