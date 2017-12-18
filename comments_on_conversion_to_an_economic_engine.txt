@@ -79,6 +79,7 @@ easiest way to see what is going on is to create a client that talks to the serv
 data queries.
 - We can develop and discard lightweight clients during development. If we have a single process running
 the simulation, we are largely stuck with iterating on a single interface.
+- Users could do strange things like get an interface to R, and attempt to do real-time econometrics!
 - If we want a multiplayer game, we need a client-server architecture.
 
 The primary problem with the client-server approach is that it is unfamiliar to most, particularly
@@ -165,7 +166,8 @@ or front future. As a result, that is possibly how the order queue would be stru
 such trades match the "fill or kill" spread structure noted earlier.
 
 The advantage of futures trading is that it allows firms to deal with items that take a long time to
-produce. Rather than buy a spaceship in the spot market, one could order one in the second futures market.
+produce. Rather than buy a spaceship in the spot market, one could order one in the second futures contract.
+(Most trading should be directed towards the second contract, since the first contract would be squeeze-prone.)
 This would provide a signal for the manufacturer to build a ship, in time for delivery into the second
 contract. If we only have spot trading, if a few firms wanted to buy a ship at the same time, it would
 cause a huge price spike if there is not enough inventory. The futures mechanism would allow for a more
@@ -193,5 +195,16 @@ If this becomes a multi-programmer project, defining the standard may turn into 
 it is probably more important to get a small, functioning version of the simulation before launching
 grandiose expansion plans. It would be easy to write a 80-page communications protocol document -- for
 a project that does not even get 20$% completed.
+
+Conversion to a Game
+--------------------
+
+Unless we put the player into the role of a policymaker, a pure economic simulation would probably be bland.
+The easiest way to spice things up is to allow conflict, like space piracy. However, it is extremely
+likely that the optimal strategy in such an environment is to blow the opposition to smithereens as
+quickly as possible. This would make the strategies completely inappropriate for researchers. As a result,
+someone who is interested in the gaming aspects would need to fork the project and push it in a new
+direction.
+
 
 
