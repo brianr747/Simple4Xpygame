@@ -13,6 +13,7 @@ from __future__ import print_function
 import clients.real_time_client
 from common import NormalTermination
 from common.event_queue import EventQueue
+from common.exchange import Exchange, Balance
 
 class RealTimeServer(object):
     def __init__(self):
@@ -95,11 +96,14 @@ class RTS_BaseSimulation(RealTimeServer):
             return
         self.TimeIncrement()
 
-    def ProcessMessage(self, ID, msg):
-        if msg.startswith('?'):
-            self.ProcessQuery(ID, msg[1:])
-            return
-        if msg == '!JOIN_PLAYER':
+    def ProcessCommand(self, ID, msg):
+        """
+        Commands are messages preceded by '!'
+        :param ID: int
+        :param msg: str
+        :return:
+        """
+        if msg == 'JOIN_PLAYER':
             if ID in self.PlayerLookup:
                 self.Log('ERROR: Player already joined: {0}'.format(ID))
                 return
@@ -109,9 +113,19 @@ class RTS_BaseSimulation(RealTimeServer):
             player_ID = len(self.PlayerLookup)
             self.PlayerLookup[ID] = player_ID
             self.Log('Player Joined: client {0} as Player {1}'.format(ID, player_ID))
-            if player_ID == self.NumPlayers -1:
+            if player_ID == self.NumPlayers - 1:
                 self.EventQueue.InsertEvent(-1, 'START_GAME')
             return
+        self.Log('Unhandled command: !' + msg)
+
+    def ProcessMessage(self, ID, msg):
+        if msg.startswith('?'):
+            self.ProcessQuery(ID, msg[1:])
+            return
+        if msg.startswith('!'):
+            self.ProcessCommand(ID, msg[1:])
+            return
+
         self.Log('Unparsed msg: {0} FROM {1}'.format(msg, ID))
 
     def ProcessQuery(self, ID, query):
@@ -183,12 +197,80 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
         super(RTS_BaseEconomicSimulation, self).__init__()
         self.Exchanges = {}
         self.CreationInfo = []
+        self.CashBalances = Balance()
 
     def CreateExchange(self, name, template_str):
         self.CreationInfo.append('CREATE_EXCHANGE\n{0}\n{1}'.format(name, template_str))
 
     def StartSimulation(self):
         super(RTS_BaseEconomicSimulation, self).StartSimulation()
+        for cmd in self.CreationInfo:
+            info = cmd.split('\n')
+            if info[0] == 'CREATE_EXCHANGE':
+                exchange = Exchange(template_str=info[2], cash_balance=self.CashBalances)
+                exchange.Name = info[1]
+                self.Exchanges[info[1]] = exchange
+            if info[0] == 'INIT_BALANCE':
+                player_list = range(0, self.NumPlayers+1)
+                for exchange in self.Exchanges.values():
+                    for commodity in exchange.Commodities.values():
+                        for p in player_list:
+                            commodity.Balances.SetBalance(p, 100)
+
+
+
+    def ProcessQuery(self, ID, query):
+        """
+
+        :param ID: int
+        :param query: str
+        :return:
+        """
+        info = query.split('|')
+        if info[0] == 'W':
+            msg = ''
+            if len(info) == 1:
+                msg = '=W|' + '|'.join(self.Exchanges.keys())
+            elif len(info) == 2:
+                exchange_name = info[1]
+                if exchange_name in self.Exchanges:
+                    msg = '=W={0}|{1}'.format(exchange_name,
+                                              self.Exchanges[exchange_name].Template)
+                else:
+                    msg = '*W ERROR: No Exchange Named {0}'.format(exchange_name)
+            else:
+                msg = '*W ERROR: Unsupporteded Query'
+            self.SendMessage(msg, ID)
+            return
+        if info[0] == 'Q':
+            exchange_name = info[1]
+            if exchange_name in self.Exchanges:
+                msg = self.Exchanges[exchange_name].ProcessQuery(query, ID)
+            else:
+                msg = '*W ERROR: No Exchange Named {0}'.format(exchange_name)
+            self.SendMessage(msg, ID)
+            return
+
+        super(RTS_BaseEconomicSimulation, self).ProcessQuery(ID, query)
+
+
+    def ProcessCommand(self, ID, msg):
+        if msg.startswith('O'):
+            info = msg.split('|')
+            if len(info) < 2:
+                self.SendMessage('Command too short: !' + msg, ID)
+                return
+            exchange = info[1]
+            if exchange not in self.Exchanges:
+                self.SendMessage('Non-existent exchange: ' + exchange, ID)
+                return
+            messages = self.Exchanges[exchange].ProcessOrder(msg, ID)
+            for ID_player, m in messages:
+                self.SendMessage(m, ID_player)
+            return
+        super(RTS_BaseEconomicSimulation, self).ProcessCommand(ID, msg)
+
+
 
 
 
