@@ -1,8 +1,8 @@
 from unittest import TestCase
-from server.real_time_server import RealTimeServer, RTS_BaseSimulation
-from server.server_process import ServerProcess
+
 from clients.real_time_client import RealTimeClient
 from common import NormalTermination
+from server.server_process import ServerProcess
 
 
 class TestServerProcess(TestCase):
@@ -60,12 +60,3 @@ class TestServerProcess(TestCase):
         with self.assertRaises(NormalTermination):
             proc.ProcessStep()
 
-class TestRTS_BaseSimulation(TestCase):
-    def test_setup(self):
-        proc = ServerProcess()
-        rts = RTS_BaseSimulation()
-        proc.SetServerObject(rts)
-        rts.ClientsToCreate.append(RealTimeClient)
-        rts.StartUp()
-        self.assertEqual(1, rts.NumPlayers)
-        self.assertEqual(1, len(proc.EmbeddedClients))

@@ -19,6 +19,7 @@ The base classes will not contain any particular simulation behaviour, they just
 
 from real_time_server import RealTimeServer
 from clients.real_time_client import RealTimeClient
+from common import NormalTermination
 
 class ServerProcess(object):
     def __init__(self):
@@ -29,6 +30,8 @@ class ServerProcess(object):
         self.EmbeddedClients = {}
         # Start off at -1; first client is 0...
         self.MaxClientID = -1
+        # Set this to None to keep running forever...
+        self.MaxIterations = 1000
 
     def SetServerObject(self, obj):
         """
@@ -60,7 +63,7 @@ class ServerProcess(object):
         # need to create a holding queue.
         holding = []
         while len(self.RealTimeServer.MessagesOut) > 0:
-            ID, msg = self.RealTimeServer.MessagesOut.pop()
+            ID, msg = self.RealTimeServer.MessagesOut.pop(0)
             if ID not in self.EmbeddedClients:
                 holding.append((ID, msg))
                 continue
@@ -69,11 +72,14 @@ class ServerProcess(object):
             # Client messages always go to/from server; no need for ID
             client.MessagesIn.append(msg)
         self.RealTimeServer.MessagesOut = holding
+        if len(holding) > 0:
+            self.RealTimeServer.Log('Unsent messages in server queue')
         # Next, handle incoming messages from embedded clients.
         for ID, client in self.EmbeddedClients.items():
             while len(client.MessagesOut) > 0:
-                msg = client.MessagesOut.pop()
+                msg = client.MessagesOut.pop(0)
                 self.RealTimeServer.MessagesIn.append((ID, msg))
+
 
 
     def ProcessStep(self):
@@ -86,6 +92,24 @@ class ServerProcess(object):
         self.RealTimeServer.Process()
         for client in self.EmbeddedClients.values():
             client.Process()
+
+
+    def Run(self):
+        """
+        Run the loop until termination.
+        Note: this is an infinite loop! Must ensure that we have a termination criterion
+        :return:
+        """
+        cnt = 0
+        while True:
+            try:
+                self.ProcessStep()
+            except NormalTermination:
+                return
+            if self.MaxIterations is not None:
+                cnt += 1
+                if cnt >= self.MaxIterations:
+                    raise ValueError('Hit maximum number of iterations!')
 
 
 
