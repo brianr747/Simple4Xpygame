@@ -56,11 +56,12 @@ class TestOrderQueue(TestCase):
 class TestCommodity(TestCase):
     def test_process_order_1(self):
         commodity = Commodity()
-        order = Order(is_buy=True, price=10, amount=10)
+        order = Order(is_buy=True, price=10, amount=10, ID_player=0)
         commodity.ProcessOrder(order)
         self.assertEqual(1, len(commodity.BuyQueue))
         self.assertEqual(0, len(commodity.SellQueue))
-        ord2 = Order(is_buy=False, price=20, amount=10)
+        commodity.Balances[0] = 10
+        ord2 = Order(is_buy=False, price=20, amount=10, ID_player=0)
         commodity.ProcessOrder(ord2)
         self.assertEqual(1, len(commodity.BuyQueue))
         self.assertEqual(1, len(commodity.SellQueue))
@@ -71,6 +72,8 @@ class TestCommodity(TestCase):
         ord_b = Order(is_buy=True, price=10, amount=10, ID_player=1)
         commodity.ProcessOrder(ord_b)
         self.assertEqual(1, len(commodity.BuyQueue))
+        # Must have inventory before selling
+        commodity.Balances[1] = 20
         ord_s = Order(is_buy=False, price=10, amount=10, ID_player=1)
         commodity.ProcessOrder(ord_s)
         self.assertEqual(0, len(commodity.BuyQueue))
@@ -82,6 +85,8 @@ class TestCommodity(TestCase):
         ord_b = Order(is_buy=True, price=10, amount=20, ID_player=1)
         commodity.ProcessOrder(ord_b)
         self.assertEqual(1, len(commodity.BuyQueue))
+        commodity.Balances[2] = 25
+        self.assertEqual(25, commodity.Balances[2])
         ord_s = Order(is_buy=False, price=10, amount=20, ID_player=2)
         commodity.ProcessOrder(ord_s)
         self.assertEqual(0, len(commodity.BuyQueue))
@@ -89,9 +94,11 @@ class TestCommodity(TestCase):
         # (buy, sell, amount, price
         self.assertEqual([(1, 2, 20, 10)], commodity.BuyQueue.Events)
 
-    def test_crossing_2(self):
+    def test_crossing_3(self):
         # second test: fill one order completely, leave the other partially filled
         commodity = Commodity()
+        commodity.Balances[1] = 20
+        commodity.Balances[2] = 20
         ord_s1 = Order(is_buy=False, price=10, amount=20, ID_player=1)
         commodity.ProcessOrder(ord_s1)
         ord_s2 = Order(is_buy=False, price=12, amount=20, ID_player=2)

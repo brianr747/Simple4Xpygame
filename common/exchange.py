@@ -5,10 +5,21 @@ Implements an exchange (with multiple commodities).
 
 """
 
+class AccountingError(ValueError):
+    pass
 
 class Balance(object):
+    """
+    Handle commodity (and cash) balances.
+    In addition to the unemcumbered balance, have a separate "held" balance, which is
+    inventory that is tied to a sell order. The exchange will reject sell orders that cannot be covered
+    by moving the unemcumbered balance to "held".
+
+    Eventually, we will probably add a category for inventory that is tied up in production.
+    """
     def __init__(self):
         self.PlayerBalances = {}
+        self.HeldBalances = {}
         # Can make this a float if desired.
         self.DefaultZero = 0
         self.EnforcePositive = False
@@ -20,10 +31,49 @@ class Balance(object):
         self.PlayerBalances[ID] = val
 
     def __getitem__(self, ID):
-        if ID not in self.PlayerBalances:
-            return self.DefaultZero
-        else:
-            return self.PlayerBalances[ID]
+        return self.PlayerBalances.get(ID, self.DefaultZero)
+
+    def GetHeld(self, ID):
+        return self.HeldBalances.get(ID, self.DefaultZero)
+
+    def MoveHeld(self, ID, amount):
+        """
+
+        :param ID: int
+        :param amount: int
+        :return:
+        """
+        if amount <= 0:
+            return
+        if amount > self.__getitem__(ID):
+            raise AccountingError('Not enough held items in inventory')
+        self.PlayerBalances[ID] -= amount
+        init = self.GetHeld(ID)
+        self.HeldBalances[ID] = init + amount
+
+    def ReleaseHeld(self, ID, amount):
+        if amount <= 0:
+            return
+        if amount > self.GetHeld(ID):
+            raise AccountingError('Attempting to release more items than are held')
+        self.HeldBalances[ID] -= amount
+        self.PlayerBalances[ID] = self.PlayerBalances.get(ID, self.DefaultZero) + amount
+
+    def ExchangeTransfer(self, ID_from, ID_to, amount):
+        """
+        Do the exchange operations, transferring from held inventory
+
+        :param ID_from: int
+        :param ID_to: int
+        :param amount: int
+        :return:
+        """
+        if amount == 0:
+            return
+        if amount > self.GetHeld(ID_from):
+            raise AccountingError('Did not have enough held inventory')
+        self.HeldBalances[ID_from] -= amount
+        self.PlayerBalances[ID_to] = self.PlayerBalances.get(ID_to, self.DefaultZero) + amount
 
     def Transfer(self, ID_from, ID_to, amount):
         if amount == 0:
@@ -31,7 +81,7 @@ class Balance(object):
         if amount < 0:
             raise ValueError("Transfer amount must be positive")
         if self.EnforcePositive and (amount > self[ID_from]):
-            raise ValueError('Negative holding after transfer not allowed')
+            raise AccountingError('Negative holding after transfer not allowed')
         self.PlayerBalances[ID_from] = self[ID_from] - amount
         self.PlayerBalances[ID_to] = self[ID_to] + amount
 
@@ -79,6 +129,7 @@ class OrderQueue(object):
     def __len__(self):
         return len(self.Queue)
 
+
     def CrossOrder(self, order):
         """
         Run an order against the queue, generating events to be processed.
@@ -98,7 +149,9 @@ class OrderQueue(object):
             if not order.CanCross(other):
                 break
             if other.ID_Player == order.ID_Player:
-                # Pop out the existing order; no transaction ('event') takes place
+                # Need to release held inventory
+                # Pop out the existing order; insert an event to release inventory
+                self.Events.append((order.ID_Player, order.ID_Player, order.Amount, 0))
                 self.Queue.pop(0)
                 continue
             # We got a transaction!
@@ -135,6 +188,38 @@ class OrderQueue(object):
                 return
         self.Queue.append(order)
 
+    def GetInfo(self, option):
+        """
+        Return order info as a ";"-delimited string
+        :return: str
+        """
+        def formatter(order):
+            return "{0},{1},{2}".format(order.Price, order.Amount, order.ID_Player)
+        if option == 'ALL':
+            out = [formatter(x) for x in self.Queue]
+            return ";".join(out)
+        if option == 'BEST':
+            if len(self.Queue) == 0:
+                return 'None@$None'
+            best = self.Queue[0].Price
+            amount = 0
+            for order in self.Queue:
+                if not order.Price == best:
+                    break
+                amount += order.Amount
+            return "{0}@${1}".format(amount, best)
+
+
+class ClientPricingInformation(object):
+    """
+    ClientPricingInformation: Holds commodity pricing information for clients.
+    Not used by server [unless we want to track changes...]
+    """
+    def __init__(self):
+        self.BestBid = None
+        self.BestOffer = None
+        self.BestBidSize = None
+        self.BestOfferSize = None
 
 class Commodity(object):
     def __init__(self, name=''):
@@ -143,10 +228,11 @@ class Commodity(object):
         self.Balances.EnforcePositive = True
         self.BuyQueue = OrderQueue(is_buy=True)
         self.SellQueue = OrderQueue(is_buy=False)
+        self.ClientPricingInformation = ClientPricingInformation()
 
+    def GetInfo(self, option):
+        return 'BUY;{0}|SELL;{1}'.format(self.BuyQueue.GetInfo(option), self.SellQueue.GetInfo(option))
 
-    def GetInfo(self):
-        return '{0}|{1}'.format(len(self.BuyQueue), len(self.SellQueue))
 
     def ProcessOrder(self, order):
         """
@@ -155,10 +241,16 @@ class Commodity(object):
         :param order: Order
         :return: list
         """
+        # If the amount is zero, do not waste time.
+        if order.Amount <= 0:
+            return []
         if order.IsBuy:
             cross_queue = self.SellQueue
             queue = self.BuyQueue
         else:
+            # We need to hold inventory before we start processing.
+            ID = order.ID_Player
+            self.Balances.MoveHeld(ID,order.Amount)
             cross_queue = self.BuyQueue
             queue = self.SellQueue
         order = cross_queue.CrossOrder(order)
@@ -208,13 +300,31 @@ class Exchange(object):
         :return: str
         """
         info = query_str.split('|')
-        if not len(info) == 3:
+        # Inventory query
+        if info[0] == 'I':
+            # Give the entire inventory for a player.
+            out = []
+            if len(info) < 2:
+                return '* ERROR: too short inventory query'
+            for c in self.Commodities:
+                commodity = self.Commodities[c]
+                amount = commodity.Balances[query_ID]
+                held = commodity.Balances.GetHeld(query_ID)
+                if not (amount, held) == (0, 0):
+                    out.append('{0};{1};{2}'.format(c, amount, held))
+            msg = '=I|{0}|{1}'.format(info[1], '|'.join(out))
+            return msg
+        if len(info) < 3:
             return '* ERROR: Unknown query format'
         commodity_name = info[2]
         if commodity_name not in self.Commodities:
             return '* ERROR: Unknown commodity: ' + commodity_name
         commodity = self.Commodities[commodity_name]
-        out = '=Q|{0}|{1}|{2}'.format(info[1], info[2], commodity.GetInfo())
+        if len(info) > 3:
+            option = info[3]
+        else:
+            option = 'ALL'
+        out = '=Q|{0}|{1}|{2}'.format(info[1], info[2], commodity.GetInfo(option))
         return out
 
 
@@ -246,10 +356,22 @@ class Exchange(object):
             return [(order_ID, '* ERROR: Invalid amount or price')]
         order = Order(is_buy, amount=amount, price=price, ID_player=order_ID)
         commodity = self.Commodities[commodity_name]
-        events = commodity.ProcessOrder(order)
+        try:
+            events = commodity.ProcessOrder(order)
+        except AccountingError as ex:
+            msg = ex.args[0]
+            return [(order_ID, msg)]
         out = []
         for buy, sell, amount, price in events:
-            commodity.Balances.Transfer(sell, buy, amount)
+            if buy == sell:
+                # Event of transfer between the same player = release inventory from "held"
+                commodity.Balances.ReleaseHeld(buy, amount)
+                continue
+            try:
+                # If the "held" information is coherent, this should not fail.
+                commodity.Balances.ExchangeTransfer(sell, buy, amount)
+            except AccountingError:
+                raise ValueError('Transfer failed; Held information might be incoherent')
             self.CashBalance.Transfer(buy, sell, amount*price)
             out.append((buy, '=BOUGHT|{0}|{1}|{2}|{3}'.format(exchange, commodity_name, amount, price)))
             out.append((sell, '=SOLD|{0}|{1}|{2}|{3}'.format(exchange, commodity_name, amount, price)))

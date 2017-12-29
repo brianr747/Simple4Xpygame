@@ -5,6 +5,7 @@ from common import NormalTermination
 from common.event_queue import EventQueue as EventQueue
 from server.server_process import ServerProcess
 from server.real_time_server import RTS_BaseEconomicSimulation
+from clients.real_time_client import EconomicClient
 
 
 # Build some simple clients
@@ -16,7 +17,7 @@ class Client1(RealTimeClient):
         self.FinishTime = fin
         self.EventQueue = EventQueue()
         self.EventQueue.InsertEvent(-1, 'join')
-        self.EventQueue.InsertEvent(2, 'sell')
+
         self.Time = -1
 
     def Process(self):
@@ -47,7 +48,7 @@ class Client1(RealTimeClient):
 
 
 
-class ManualClient(Client1):
+class ManualClient(EconomicClient):
     def __init__(self):
         super(ManualClient, self).__init__()
         self.TimeStepRequest = 1
@@ -62,6 +63,16 @@ class ManualClient(Client1):
         x = x.strip()
         if x.lower() == 'quit':
             raise KeyboardInterrupt('Dun!')
+        if x.lower() == 's':
+            print('State information')
+            print('Time = ',self.Time)
+            print('Exchanges\n===========')
+            for name, ex in self.Exchanges.items():
+                print(name, ex.Commodities.keys())
+            print('Production Function')
+            for k,v in self.Production.Techniques.items():
+                print(k, v.Description, v.Output)
+
         if len(x) > 0:
             self.MessagesOut.append(x)
         else:
@@ -80,11 +91,12 @@ def main():
     """
     proc = ServerProcess()
     rts = RTS_BaseEconomicSimulation()
-    rts.CreateExchange('W1', 'cats')
+    rts.CreateExchange('W1', 'cats|dogs')
     rts.CreationInfo.append('INIT_BALANCE')
     rts.QuitTime = 10
     proc.SetServerObject(rts)
     c1 = Client1()
+    c1.EventQueue.InsertEvent(2, 'sell')
     c2 = ManualClient()
     rts.ClientsToCreate = [c1, c2]
     rts.StartUp()

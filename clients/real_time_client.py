@@ -9,6 +9,9 @@ The holding classes manage all communications for the client.
 """
 
 
+from common.event_queue import EventQueue
+from common.exchange import Exchange
+from common.production import Production
 
 class RealTimeClient(object):
     def __init__(self):
@@ -17,3 +20,60 @@ class RealTimeClient(object):
 
     def Process(self):
         pass
+
+
+class EconomicClient(RealTimeClient):
+    def __init__(self, fin=100):
+        super(EconomicClient, self).__init__()
+        self.TimeStepRequest = 2
+        self.FinishTime = fin
+        self.EventQueue = EventQueue()
+        self.EventQueue.InsertEvent(-1, 'join')
+        self.Time = -1
+        self.Exchanges = {}
+        # Turn BuildState to False to disable automatic state building.
+        self.BuildState = True
+        self.EventQueue.InsertEvent(0, 'build_state')
+        self.Production = Production()
+
+    def Process(self):
+        if len(self.MessagesIn) > 0:
+            msg = self.MessagesIn.pop(0)
+            self.ParseMessage(msg)
+            return
+        event = self.EventQueue.PopEvent(self.Time)
+        # Only do one event in each Process() step (to play nice...)
+        if event is None:
+            return
+        if event == 'join':
+            self.MessagesOut.append('!JOIN_PLAYER')
+            self.MessagesOut.append('?T|REPEAT|{0}'.format(self.TimeStepRequest))
+            return
+        if event == 'build_state' and self.BuildState:
+            self.MessagesOut.append('?W')
+            self.MessagesOut.append('?P')
+
+
+    def ParseMessage(self, msg):
+        """
+
+        :param msg: str
+        :return:
+        """
+        # print(msg)
+        if msg.startswith('=T='):
+            self.Time = int(msg[3:].strip())
+        if msg.startswith('=P='):
+            self.Production.ParseTemplate(msg[3:].strip())
+        if msg.startswith('=W'):
+            info = msg.split('|')
+            if info[0] == '=W':
+                for n in info[1:]:
+                    self.MessagesOut.append('?W|' + n)
+            else:
+                if not info[0].startswith('=W='):
+                    raise ValueError('unparsable server response: ' + msg)
+                name = info[0][3:]
+                template = '|'.join(info[1:])
+                self.Exchanges[name] = Exchange(template_str=template)
+

@@ -14,6 +14,7 @@ import clients.real_time_client
 from common import NormalTermination
 from common.event_queue import EventQueue
 from common.exchange import Exchange, Balance
+from common.production import Production, GetStandardProductionTemplates
 
 class RealTimeServer(object):
     def __init__(self):
@@ -198,12 +199,15 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
         self.Exchanges = {}
         self.CreationInfo = []
         self.CashBalances = Balance()
+        self.Production = Production()
+        self.ProductionTemplate = GetStandardProductionTemplates('simplest')
 
     def CreateExchange(self, name, template_str):
         self.CreationInfo.append('CREATE_EXCHANGE\n{0}\n{1}'.format(name, template_str))
 
     def StartSimulation(self):
         super(RTS_BaseEconomicSimulation, self).StartSimulation()
+        self.Production.ParseTemplate(self.ProductionTemplate)
         for cmd in self.CreationInfo:
             info = cmd.split('\n')
             if info[0] == 'CREATE_EXCHANGE':
@@ -242,7 +246,7 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
                 msg = '*W ERROR: Unsupporteded Query'
             self.SendMessage(msg, ID)
             return
-        if info[0] == 'Q':
+        if info[0] in ('Q', 'I'):
             exchange_name = info[1]
             if exchange_name in self.Exchanges:
                 msg = self.Exchanges[exchange_name].ProcessQuery(query, ID)
@@ -250,7 +254,9 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
                 msg = '*W ERROR: No Exchange Named {0}'.format(exchange_name)
             self.SendMessage(msg, ID)
             return
-
+        if info[0] == 'P':
+            self.SendMessage('=P=' + self.ProductionTemplate, ID)
+            return
         super(RTS_BaseEconomicSimulation, self).ProcessQuery(ID, query)
 
 
