@@ -54,6 +54,14 @@ class Production(object):
         self.Template = ''
         self.Techniques = {}
 
+    def __getitem__(self, item):
+        """
+        Get the technique; throws a KeyError if non-existent
+        :param item: str
+        :return: Technique
+        """
+        return self.Techniques[item]
+
     def ParseTemplate(self, template):
         """
 

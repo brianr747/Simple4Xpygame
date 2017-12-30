@@ -221,8 +221,6 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
                         for p in player_list:
                             commodity.Balances.SetBalance(p, 100)
 
-
-
     def ProcessQuery(self, ID, query):
         """
 
@@ -247,6 +245,9 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
             self.SendMessage(msg, ID)
             return
         if info[0] in ('Q', 'I'):
+            if len(info) < 2:
+                self.SendMessage('*ERROR: Too short query = '+query, ID)
+                return
             exchange_name = info[1]
             if exchange_name in self.Exchanges:
                 msg = self.Exchanges[exchange_name].ProcessQuery(query, ID)
@@ -258,7 +259,6 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
             self.SendMessage('=P=' + self.ProductionTemplate, ID)
             return
         super(RTS_BaseEconomicSimulation, self).ProcessQuery(ID, query)
-
 
     def ProcessCommand(self, ID, msg):
         if msg.startswith('O'):
@@ -274,7 +274,73 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
             for ID_player, m in messages:
                 self.SendMessage(m, ID_player)
             return
+        if msg.startswith('P'):
+            self.ProcessProductionMessage(ID, msg)
+            return
         super(RTS_BaseEconomicSimulation, self).ProcessCommand(ID, msg)
+
+    def ProcessEvent(self, event):
+        if type(event) == tuple:
+            if event[0] == 'PRODUCTION':
+                dummy, exchange_name, technique_name, ID, amount = event
+                exchange = self.Exchanges[exchange_name]
+                technique = self.Production.Techniques[technique_name]
+                # Return InProduction
+                for k,v in technique.InProduction:
+                    exchange.Commodities[k].Balances.ReleaseInProduction(ID, amount*v)
+                for k,v in technique.Output:
+                    exchange.Commodities[k].Balances[ID] = exchange.Commodities[k].Balances[ID] + (amount*v)
+                self.SendMessage('!P|{0}|{1}|{2}'.format(exchange_name, technique_name, amount), ID)
+                return
+        super(RTS_BaseEconomicSimulation, self).ProcessEvent(event)
+
+
+
+
+    def ProcessProductionMessage(self, ID, msg):
+        info = msg.split('|')
+        if len(info) < 4:
+            self.SendMessage('* ERROR: Bad Production message: ' + msg, ID)
+            return
+        dummy, exchange_name, technique_name, amount = info[0:4]
+        if exchange_name not in self.Exchanges:
+            self.SendMessage('* ERROR: Exchange {0} does not exist'.format(exchange_name), ID)
+            return
+        exchange = self.Exchanges[exchange_name]
+        if technique_name not in self.Production.Techniques:
+            self.SendMessage('* ERROR: Unknown production technique: {0}'.format(technique_name), ID)
+            return
+        technique = self.Production[technique_name]
+        try:
+            amount = int(amount)
+        except:
+            self.SendMessage('* ERROR: Bad production amount: {0}'.format(amount), ID)
+            return
+        # Must meet all required inputs.
+        requirements = {}
+        # The trick is that we could have the same commodity both required and InProduction
+        for k,v in technique.Consumed:
+            requirements[k] = v
+        for k,v in technique.InProduction:
+            if k in requirements:
+                requirements[k] += v
+            else:
+                requirements[k] = v
+        # Now check
+        for k,v in requirements.items():
+            if amount*v > exchange.GetInventory(k, ID):
+                self.SendMessage('*ERROR: Insufficient {0} FOR PRODUCTION'.format(k), ID)
+                return
+        # Now, do the work
+        for k,v in technique.Consumed:
+            exchange.Commodities[k].Balances.Consume(ID, amount*v)
+        for k, v in technique.InProduction:
+            exchange.Commodities[k].Balances.MoveToInProduction(ID, amount*v)
+        self.EventQueue.InsertEvent(self.T + technique.Time, ('PRODUCTION', exchange_name, technique_name, ID, amount))
+
+
+
+
 
 
 

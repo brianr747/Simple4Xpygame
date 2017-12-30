@@ -15,11 +15,13 @@ class Balance(object):
     inventory that is tied to a sell order. The exchange will reject sell orders that cannot be covered
     by moving the unemcumbered balance to "held".
 
-    Eventually, we will probably add a category for inventory that is tied up in production.
+    Also, there is an "InProduction" balance, which are items that are tied up with production, and cannot
+    be accessed.
     """
     def __init__(self):
         self.PlayerBalances = {}
         self.HeldBalances = {}
+        self.InProduction = {}
         # Can make this a float if desired.
         self.DefaultZero = 0
         self.EnforcePositive = False
@@ -35,6 +37,9 @@ class Balance(object):
 
     def GetHeld(self, ID):
         return self.HeldBalances.get(ID, self.DefaultZero)
+
+    def GetInProduction(self, ID):
+        return self.InProduction.get(ID, self.DefaultZero)
 
     def MoveHeld(self, ID, amount):
         """
@@ -58,6 +63,22 @@ class Balance(object):
             raise AccountingError('Attempting to release more items than are held')
         self.HeldBalances[ID] -= amount
         self.PlayerBalances[ID] = self.PlayerBalances.get(ID, self.DefaultZero) + amount
+
+    def MoveToInProduction(self, ID, amount):
+        if amount <= 0:
+            return
+        if amount > self[ID]:
+            raise AccountingError('Insufficient inventory for production')
+        self.PlayerBalances[ID] -= amount
+        self.InProduction[ID] = self.GetInProduction(ID) + amount
+
+    def ReleaseInProduction(self, ID, amount):
+        if amount <= 0:
+            return
+        if amount > self.GetInProduction(ID):
+            raise AccountingError('Insufficient InProduction inventory')
+        self.PlayerBalances[ID] = self[ID] + amount
+        self.InProduction[ID] -= amount
 
     def ExchangeTransfer(self, ID_from, ID_to, amount):
         """
@@ -84,6 +105,13 @@ class Balance(object):
             raise AccountingError('Negative holding after transfer not allowed')
         self.PlayerBalances[ID_from] = self[ID_from] - amount
         self.PlayerBalances[ID_to] = self[ID_to] + amount
+
+    def Consume(self, ID, amount):
+        if amount <= 0:
+            return
+        if amount > self[ID]:
+            raise AccountingError('Insufficient inventory for consumption')
+        self.PlayerBalances[ID] -= amount
 
 class Order(object):
     def __init__(self, is_buy=True, price=0, amount=0, ID_player=-1):
@@ -276,6 +304,16 @@ class Exchange(object):
         if not template_str == '':
             self.ParseTemplate(template_str=template_str)
 
+
+    def GetInventory(self, commodity, ID):
+        """
+        Get the inventory; throws a KeyError if the commodity does not exist
+        :param commodity: str
+        :param ID: int
+        :return: int
+        """
+        return self.Commodities[commodity].Balances[ID]
+
     def ParseTemplate(self, template_str):
         """
         Reset the commodity list based on a template string
@@ -310,8 +348,9 @@ class Exchange(object):
                 commodity = self.Commodities[c]
                 amount = commodity.Balances[query_ID]
                 held = commodity.Balances.GetHeld(query_ID)
-                if not (amount, held) == (0, 0):
-                    out.append('{0};{1};{2}'.format(c, amount, held))
+                inprod = commodity.Balances.GetInProduction(query_ID)
+                if not (amount, held, inprod) == (0, 0, 0):
+                    out.append('{0};{1};{2};{3}'.format(c, amount, held, inprod))
             msg = '=I|{0}|{1}'.format(info[1], '|'.join(out))
             return msg
         if len(info) < 3:
