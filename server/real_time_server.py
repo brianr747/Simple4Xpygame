@@ -12,7 +12,7 @@ from __future__ import print_function
 
 import clients.real_time_client
 from common import NormalTermination
-from common.event_queue import EventQueue
+from common.event_queue import EventQueue, Event
 from common.exchange import Exchange, Balance
 from common.production import Production, GetStandardProductionTemplates
 
@@ -79,7 +79,8 @@ class RTS_BaseSimulation(RealTimeServer):
         self.NumPlayers = len(self.ClientsToCreate)
         for client in self.ClientsToCreate:
             self.AddClientStub(client)
-        self.EventQueue.InsertEvent(self.QuitTime, 'END_GAME')
+        event = Event(callback=self.EndSimulation, txt='End Simlation')
+        self.EventQueue.InsertEvent(self.QuitTime, event)
 
     def Process(self):
         """
@@ -92,7 +93,11 @@ class RTS_BaseSimulation(RealTimeServer):
             self.ProcessMessage(ID, msg)
             return
         event = self.EventQueue.PopEvent(self.T)
+        if type(event) == Event:
+            event.Evaluate()
+            return
         if event is not None:
+            self.Log('Non-Event object event: {0}'.format(event))
             self.ProcessEvent(event)
             return
         self.TimeIncrement()
@@ -115,7 +120,8 @@ class RTS_BaseSimulation(RealTimeServer):
             self.PlayerLookup[ID] = player_ID
             self.Log('Player Joined: client {0} as Player {1}'.format(ID, player_ID))
             if player_ID == self.NumPlayers - 1:
-                self.EventQueue.InsertEvent(-1, 'START_GAME')
+                event = Event(callback=self.EventStartSimulation, txt='START_SIMULATION')
+                self.EventQueue.InsertEvent(-1, event)
             return
         self.Log('Unhandled command: !' + msg)
 
@@ -139,13 +145,20 @@ class RTS_BaseSimulation(RealTimeServer):
         if query[0] == 'T':
             if len(query) == 3 and query[1] == 'REPEAT':
                 step = int(query[2])
-                event = ('?T\n{0}'.format(ID), 'REPEAT', step, self.T + step)
+                event = Event(callback=self.EventSendTime, kwargs={'ID': ID},
+                              txt='Send time to {0}'.format(ID), repeat=step, start_repeat=self.T + step)
+                # event = ('?T\n{0}'.format(ID), 'REPEAT', step, self.T + step)
                 self.EventQueue.InsertEvent(self.T + step, event)
-            self.SendMessage('=T={0}'.format(self.T), ID)
+            self.EventSendTime(ID)
             return
         self.Log('Unparsed Query: {0} From {1}'.format(query, ID))
 
     def ProcessEvent(self, event):
+        """
+        Deprecated function; now handled as callbacks in the Event class
+        :param event:
+        :return:
+        """
         self.Log('EVENT: {0}'.format(event))
         if type(event) is tuple:
             if event[1] == 'REPEAT':
@@ -160,9 +173,9 @@ class RTS_BaseSimulation(RealTimeServer):
             else:
                 self.Log('Unknown event')
                 return
-        if event == 'START_GAME':
-            self.StartSimulation()
-            return
+        # if event == 'START_GAME':
+        #     self.StartSimulation()
+        #     return
         if event == 'END_GAME':
             self.EndSimulation()
             return
@@ -174,7 +187,17 @@ class RTS_BaseSimulation(RealTimeServer):
             return
         self.Log('Unknown EVENT: ' + event)
 
-    def StartSimulation(self):
+    def EventSendTime(self, ID):
+        """
+        Send a time axis message to an ID
+        :param ID: int
+        :return:
+        """
+        self.SendMessage('=T={0}'.format(self.T), ID)
+
+
+
+    def EventStartSimulation(self):
         # Once we move T to 0, the simulation starts
         self.Log('STARTING SIMULATION')
         self.T = 0
@@ -205,8 +228,8 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
     def CreateExchange(self, name, template_str):
         self.CreationInfo.append('CREATE_EXCHANGE\n{0}\n{1}'.format(name, template_str))
 
-    def StartSimulation(self):
-        super(RTS_BaseEconomicSimulation, self).StartSimulation()
+    def EventStartSimulation(self):
+        super(RTS_BaseEconomicSimulation, self).EventStartSimulation()
         self.Production.ParseTemplate(self.ProductionTemplate)
         for cmd in self.CreationInfo:
             info = cmd.split('\n')
@@ -280,6 +303,11 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
         super(RTS_BaseEconomicSimulation, self).ProcessCommand(ID, msg)
 
     def ProcessEvent(self, event):
+        """
+        Deprecated...
+        :param event:
+        :return:
+        """
         if type(event) == tuple:
             if event[0] == 'PRODUCTION':
                 dummy, exchange_name, technique_name, ID, amount = event
@@ -293,6 +321,17 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
                 self.SendMessage('!P|{0}|{1}|{2}'.format(exchange_name, technique_name, amount), ID)
                 return
         super(RTS_BaseEconomicSimulation, self).ProcessEvent(event)
+
+    def EventProduction(self, exchange_name, technique_name, ID, amount):
+        exchange = self.Exchanges[exchange_name]
+        technique = self.Production.Techniques[technique_name]
+        # Return InProduction
+        for k, v in technique.InProduction:
+            exchange.Commodities[k].Balances.ReleaseInProduction(ID, amount * v)
+        for k, v in technique.Output:
+            exchange.Commodities[k].Balances[ID] = exchange.Commodities[k].Balances[ID] + (amount * v)
+        self.SendMessage('!P|{0}|{1}|{2}'.format(exchange_name, technique_name, amount), ID)
+
 
 
 
@@ -336,7 +375,10 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
             exchange.Commodities[k].Balances.Consume(ID, amount*v)
         for k, v in technique.InProduction:
             exchange.Commodities[k].Balances.MoveToInProduction(ID, amount*v)
-        self.EventQueue.InsertEvent(self.T + technique.Time, ('PRODUCTION', exchange_name, technique_name, ID, amount))
+        event = Event(callback=self.EventProduction)
+        event.Args = (exchange_name, technique_name, ID, amount)
+        event.Text = 'Production Event From {0}: {1}'.format(ID, msg)
+        self.EventQueue.InsertEvent(self.T + technique.Time, event)
 
 
 
