@@ -15,12 +15,14 @@ from common import NormalTermination
 from common.event_queue import EventQueue, Event
 from common.exchange import Exchange, Balance
 from common.production import Production, GetStandardProductionTemplates
+from common.protocols import Protocol, ProtocolError, UnsupportedMessage
 
 class RealTimeServer(object):
     def __init__(self):
         self.MessagesOut = []
         self.MessagesIn = []
         self.LogData = []
+        self.Protocol = Protocol()
 
     def SendMessage(self, msg, id_client):
         self.MessagesOut.append((id_client, msg))
@@ -74,6 +76,15 @@ class RTS_BaseSimulation(RealTimeServer):
         self.PlayerLookup = {}
         self.QuitTime = 1
         self.EventQueue = EventQueue()
+        self.SetHandlers()
+
+    def SetHandlers(self):
+        """
+        If we change the Protocol, call this before starting to receive messages.
+        :return:
+        """
+        self.Protocol.Handlers['?T'] = self.HandlerQueryT
+        self.Protocol.Handlers['!JOIN_PLAYER'] = self.HandlerJoinPlayer
 
     def StartUp(self):
         self.NumPlayers = len(self.ClientsToCreate)
@@ -90,6 +101,17 @@ class RTS_BaseSimulation(RealTimeServer):
         """
         if len(self.MessagesIn) > 0:
             ID, msg = self.MessagesIn.pop(0)
+            processed = False
+            try:
+                self.Protocol.HandleMessage(msg, ID)
+                return
+            except UnsupportedMessage:
+                pass
+            except ProtocolError as ex:
+                self.SendMessage('ERROR: ' + ex.args[0] + ' in: ' +msg, ID)
+                return
+            # Fall through to the deprecated function...
+            print('Deprecated message type:' + msg)
             self.ProcessMessage(ID, msg)
             return
         event = self.EventQueue.PopEvent(self.T)
@@ -109,23 +131,16 @@ class RTS_BaseSimulation(RealTimeServer):
         :param msg: str
         :return:
         """
-        if msg == 'JOIN_PLAYER':
-            if ID in self.PlayerLookup:
-                self.Log('ERROR: Player already joined: {0}'.format(ID))
-                return
-            if len(self.PlayerLookup) >= self.NumPlayers:
-                self.Log('ERROR: Attempting to join with max players {0}'.format(ID))
-                return
-            player_ID = len(self.PlayerLookup)
-            self.PlayerLookup[ID] = player_ID
-            self.Log('Player Joined: client {0} as Player {1}'.format(ID, player_ID))
-            if player_ID == self.NumPlayers - 1:
-                event = Event(callback=self.EventStartSimulation, txt='START_SIMULATION')
-                self.EventQueue.InsertEvent(-1, event)
-            return
         self.Log('Unhandled command: !' + msg)
 
     def ProcessMessage(self, ID, msg):
+        """
+        Deprecated
+        :param ID:
+        :param msg:
+        :return:
+        """
+        print('Deprecated message: ' + msg)
         if msg.startswith('?'):
             self.ProcessQuery(ID, msg[1:])
             return
@@ -137,20 +152,12 @@ class RTS_BaseSimulation(RealTimeServer):
 
     def ProcessQuery(self, ID, query):
         """
+        Deprecated
+
         Handle a query (leading ? is stripped)
         :param query:
         :return:
         """
-        query = query.split('|')
-        if query[0] == 'T':
-            if len(query) == 3 and query[1] == 'REPEAT':
-                step = int(query[2])
-                event = Event(callback=self.EventSendTime, kwargs={'ID': ID},
-                              txt='Send time to {0}'.format(ID), repeat=step, start_repeat=self.T + step)
-                # event = ('?T\n{0}'.format(ID), 'REPEAT', step, self.T + step)
-                self.EventQueue.InsertEvent(self.T + step, event)
-            self.EventSendTime(ID)
-            return
         self.Log('Unparsed Query: {0} From {1}'.format(query, ID))
 
     def ProcessEvent(self, event):
@@ -159,43 +166,38 @@ class RTS_BaseSimulation(RealTimeServer):
         :param event:
         :return:
         """
-        self.Log('EVENT: {0}'.format(event))
-        if type(event) is tuple:
-            if event[1] == 'REPEAT':
-                # We want to repeat the event starting at 'start', with time increment 'step'
-                # We preserve the "start" time since we may be skipping time steps in
-                # real time mode.
-                msg, repeat, step, start = event
-                new_event = (msg, 'REPEAT', step, start + step)
-                self.EventQueue.InsertEvent(start + step, new_event)
-                # Convert to a string message that is parsed.
-                event = msg
-            else:
-                self.Log('Unknown event')
-                return
-        # if event == 'START_GAME':
-        #     self.StartSimulation()
-        #     return
-        if event == 'END_GAME':
-            self.EndSimulation()
-            return
-        if event.startswith('?'):
-            # It's a data query that was placed as an event.
-            msg, ID = event[1:].split('\n')
-            ID = int(ID)
-            self.ProcessQuery(ID, msg)
-            return
         self.Log('Unknown EVENT: ' + event)
+
+    def HandlerQueryT(self, ID, repeat, step):
+        msg = self.Protocol.BuildMessage('=T', self.T)
+        self.SendMessage(msg, ID)
+        if repeat:
+            event = Event(callback=self.EventSendTime, kwargs={'ID': ID},
+                      txt='Send time to {0}'.format(ID), repeat=step, start_repeat=self.T + step)
+            # event = ('?T\n{0}'.format(ID), 'REPEAT', step, self.T + step)
+            self.EventQueue.InsertEvent(self.T + step, event)
+
+    def HandlerJoinPlayer(self, ID):
+        if ID in self.PlayerLookup:
+            self.Log('ERROR: Player already joined: {0}'.format(ID))
+            raise ProtocolError('Already Joined')
+        if len(self.PlayerLookup) >= self.NumPlayers:
+            self.Log('ERROR: Attempting to join with max players {0}'.format(ID))
+            raise ProtocolError('Error: Already at max players')
+        player_ID = len(self.PlayerLookup)
+        self.PlayerLookup[ID] = player_ID
+        self.Log('Player Joined: client {0} as Player {1}'.format(ID, player_ID))
+        if player_ID == self.NumPlayers - 1:
+            event = Event(callback=self.EventStartSimulation, txt='START_SIMULATION')
+            self.EventQueue.InsertEvent(-1, event)
 
     def EventSendTime(self, ID):
         """
-        Send a time axis message to an ID
+        Send a time axis message to an ID; calls HandlerQueryT
         :param ID: int
         :return:
         """
-        self.SendMessage('=T={0}'.format(self.T), ID)
-
-
+        self.HandlerQueryT(ID, repeat=False, step=0)
 
     def EventStartSimulation(self):
         # Once we move T to 0, the simulation starts
@@ -225,6 +227,11 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
         self.Production = Production()
         self.ProductionTemplate = GetStandardProductionTemplates('simplest')
 
+    def SetHandlers(self):
+        super(RTS_BaseEconomicSimulation, self).SetHandlers()
+        self.Protocol.Handlers['?W'] = self.HandlerQueryW
+        self.Protocol.Handlers['?W1'] = self.HandlerQueryW1
+
     def CreateExchange(self, name, template_str):
         self.CreationInfo.append('CREATE_EXCHANGE\n{0}\n{1}'.format(name, template_str))
 
@@ -243,6 +250,18 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
                     for commodity in exchange.Commodities.values():
                         for p in player_list:
                             commodity.Balances.SetBalance(p, 100)
+
+    def HandlerQueryW(self, ID):
+        vals = self.Exchanges.keys()
+        msg = self.Protocol.BuildMessage('=W', vals)
+        self.SendMessage(msg, ID)
+
+    def HandlerQueryW1(self, ID, exchange):
+        if exchange not in self.Exchanges:
+            raise ProtocolError('Unknown exchange = ' + exchange)
+        msg = self.Protocol.BuildMessage('=W1', exchange, self.Exchanges[exchange].Template.split(';'))
+        self.SendMessage(msg, ID)
+
 
     def ProcessQuery(self, ID, query):
         """

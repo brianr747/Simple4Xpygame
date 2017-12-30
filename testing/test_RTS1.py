@@ -91,7 +91,7 @@ def main():
     """
     proc = ServerProcess()
     rts = RTS_BaseEconomicSimulation()
-    rts.CreateExchange('W1', 'Capital|Goods')
+    rts.CreateExchange('W1', 'Capital;Goods')
     rts.CreationInfo.append('INIT_BALANCE')
     rts.QuitTime = 10
     proc.SetServerObject(rts)

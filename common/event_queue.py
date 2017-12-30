@@ -64,6 +64,8 @@ class EventQueue(object):
                 dummy, event = self.Events.pop(0)
                 if type(event) == Event:
                     if event.Repeat is not None:
+                        # Do not allow a Repeat of zero!
+                        event.Repeat = min(1, event.Repeat)
                         # If it repeats, re-insert the event at "StartRepeat" + "Repeat"
                         new_index = event.StartRepeat + event.Repeat
                         event.StartRepeat = new_index

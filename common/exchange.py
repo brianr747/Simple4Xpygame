@@ -322,7 +322,7 @@ class Exchange(object):
         """
         self.Commodities = {}
         self.Template = template_str
-        c_list = template_str.split('|')
+        c_list = template_str.split(';')
         for c in c_list:
             c = c.strip()
             if len(c) > 0:

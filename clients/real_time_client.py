@@ -12,6 +12,7 @@ The holding classes manage all communications for the client.
 from common.event_queue import EventQueue
 from common.exchange import Exchange
 from common.production import Production
+from common.protocols import Protocol
 
 class RealTimeClient(object):
     def __init__(self):
@@ -35,6 +36,7 @@ class EconomicClient(RealTimeClient):
         self.BuildState = True
         self.EventQueue.InsertEvent(0, 'build_state')
         self.Production = Production()
+        self.Protocol = Protocol()
 
     def Process(self):
         if len(self.MessagesIn) > 0:
@@ -47,7 +49,8 @@ class EconomicClient(RealTimeClient):
             return
         if event == 'join':
             self.MessagesOut.append('!JOIN_PLAYER')
-            self.MessagesOut.append('?T|REPEAT|{0}'.format(self.TimeStepRequest))
+            msg = self.Protocol.BuildMessage('?T', REPEAT=True, STEP=self.TimeStepRequest)
+            self.MessagesOut.append(msg)
             return
         if event == 'build_state' and self.BuildState:
             self.MessagesOut.append('?W')
@@ -61,7 +64,7 @@ class EconomicClient(RealTimeClient):
         :return:
         """
         # print(msg)
-        if msg.startswith('=T='):
+        if msg.startswith('=T|'):
             self.Time = int(msg[3:].strip())
         if msg.startswith('=P='):
             self.Production.ParseTemplate(msg[3:].strip())
@@ -69,8 +72,8 @@ class EconomicClient(RealTimeClient):
             info = msg.split('|')
             if info[0] == '=W':
                 for n in info[1:]:
-                    self.MessagesOut.append('?W|' + n)
-            else:
+                    self.MessagesOut.append('?W1|' + n)
+            elif info[1] == '=W1':
                 if not info[0].startswith('=W='):
                     raise ValueError('unparsable server response: ' + msg)
                 name = info[0][3:]
