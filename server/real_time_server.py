@@ -235,6 +235,7 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
         self.Protocol.Handlers['!O'] = self.HandlerOrder
         self.Protocol.Handlers['?Q'] = self.HandlerQueryQ
         self.Protocol.Handlers['?C'] = self.HandlerQueryC
+        self.Protocol.Handlers['!O_REMOVE'] = self.HandlerRemoveOrder
 
     def CreateExchange(self, name, template_str):
         self.CreationInfo.append('CREATE_EXCHANGE\n{0}\n{1}'.format(name, template_str))
@@ -266,12 +267,20 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
         msg = self.Protocol.BuildMessage('=W1', exchange, self.Exchanges[exchange].Template.split(';'))
         self.SendMessage(msg, ID)
 
-    def HandlerOrder(self, ID, exchange, commodity, order_type, amount, price):
+    def GetExchange(self, exchange):
+        """
+        Throws a ProtocolError if the exchange does not exist
+        :param exchange: str
+        :return: Exchange
+        """
         if exchange not in self.Exchanges:
             raise ProtocolError('Non-existent exchange: ' + exchange)
+        return self.Exchanges[exchange]
+
+    def HandlerOrder(self, ID, exchange, commodity, order_type, amount, price):
         try:
-            messages = self.Exchanges[exchange].ProcessOrder(ID, exchange, commodity, order_type, amount, price,
-                                                             self.Protocol)
+            messages = self.GetExchange(exchange).ProcessOrder(ID, exchange, commodity, order_type, amount, price,
+                                                       self.Protocol)
         except AccountingError as ex:
             msg = self.Protocol.BuildMessage('#O_FAIL', ex.args[0])
             self.SendMessage(msg, ID)
@@ -280,18 +289,20 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
             self.SendMessage(m, ID_player)
 
     def HandlerQueryQ(self, ID, exchange, commodity, quote_type):
-        if exchange not in self.Exchanges:
-            raise ProtocolError('Non-existent exchange: ' + exchange)
-        msg = self.Exchanges[exchange].GetQuote(ID, exchange, commodity, quote_type, self.Protocol)
+        msg = self.GetExchange(exchange).GetQuote(ID, exchange, commodity, quote_type, self.Protocol)
         self.SendMessage(msg, ID)
 
     def HandlerQueryC(self, ID):
         msg = self.Protocol.BuildMessage('=C', self.CashBalances[ID], 0)
         self.SendMessage(msg, ID)
 
+    def HandlerRemoveOrder(self, ID, exchange, commodity, remove_type):
+        ex = self.GetExchange(exchange)
+        ex.RemoveOrders(ID, commodity, remove_type)
+
     def ProcessQuery(self, ID, query):
         """
-
+        DEPRECATED
         :param ID: int
         :param query: str
         :return:

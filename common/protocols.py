@@ -83,12 +83,16 @@ class ProtocolInfo(object):
             # Cash level query
             ('?', 'C', ()),
             # Cash level response
-            ('=', 'C', (('cash', 'int', None), ('credit_limit', 'int', None)))
+            ('=', 'C', (('cash', 'int', None), ('credit_limit', 'int', None))),
+            # Remove orders
+            ('!', 'O_REMOVE', (('exchange','str', None), ('commodity','str', None),
+                               ('remove_type', 'remove_type', None))),
         )
         self.MessageLookup = {}
         self.Enums = {
             'order_type': ('B', 'S'),
             'quote_type': ('BEST', 'MINE'),
+            'remove_type': ('BID', 'ASK', 'ALL'),
         }
         for leadchar, code, variables in self.Messages:
             front = leadchar + code

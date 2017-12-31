@@ -159,7 +159,6 @@ class OrderQueue(object):
     def __len__(self):
         return len(self.Queue)
 
-
     def CrossOrder(self, order):
         """
         Run an order against the queue, generating events to be processed.
@@ -430,6 +429,16 @@ class Exchange(object):
         msg = protocol.BuildMessage('=Q', exchange, commodity, quote_type, bid, offer)
         return msg
 
+    def GetCommodity(self, commodity):
+        """
+        Throws a ProtocolError if Commodity is not present
+        :param commodity: str
+        :return: Commodity
+        """
+        try:
+            return self.Commodities[commodity]
+        except KeyError:
+            raise ProtocolError('Commodity does not exist: ' + commodity)
 
     def ProcessOrder(self, order_ID, exchange, commodity_name, buy_sell, amount, price, protocol):
         """
@@ -443,11 +452,9 @@ class Exchange(object):
         :param protocol: Protocol
         :return:
         """
-        if commodity_name not in self.Commodities:
-            raise ProtocolError('ERROR: Unknown commodity: ' + commodity_name)
         is_buy = buy_sell == 'B'
         order = Order(is_buy, amount=amount, price=price, ID_player=order_ID)
-        commodity = self.Commodities[commodity_name]
+        commodity = self.GetCommodity(commodity_name)
         events = commodity.ProcessOrder(order)
         out = []
         for buy, sell, amount, price in events:
@@ -466,6 +473,33 @@ class Exchange(object):
             msg = protocol.BuildMessage('#O_FILL', exchange, commodity_name, 'S', amount, price)
             out.append((sell, msg))
         return out
+
+    def RemoveOrders(self, ID, commodity_name, remove_type):
+        """
+        Remove orders from exchange
+        :param commodity: str
+        :param remove_type: str
+        :return:
+        """
+        commodity = self.GetCommodity(commodity_name)
+        if remove_type not in ('BID', 'ASK', 'ALL'):
+            raise ProtocolError('Unsupported remove_type: ' + remove_type)
+        # Do removal by iterating in reverse order. We can pop out entries at the end, without affecting
+        # the indices of earlier elements
+        if remove_type in ('BID', 'ALL'):
+            for pos in range(len(commodity.BuyQueue)-1, -1, -1):
+                if commodity.BuyQueue.Queue[pos].ID_Player == ID:
+                    commodity.BuyQueue.Queue.pop(pos)
+        if remove_type in ('ASK', 'ALL'):
+            for pos in range(len(commodity.SellQueue)-1, -1, -1):
+                if commodity.SellQueue.Queue[pos].ID_Player == ID:
+                    order = commodity.SellQueue.Queue.pop(pos)
+                    commodity.Balances.ReleaseHeld(ID, order.Amount)
+
+
+
+
+
 
 
 
