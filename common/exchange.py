@@ -5,6 +5,8 @@ Implements an exchange (with multiple commodities).
 
 """
 
+from common.protocols import ProtocolError, Protocol
+
 class AccountingError(ValueError):
     pass
 
@@ -218,6 +220,7 @@ class OrderQueue(object):
 
     def GetInfo(self, option):
         """
+        DEPRECATED
         Return order info as a ";"-delimited string
         :return: str
         """
@@ -236,6 +239,41 @@ class OrderQueue(object):
                     break
                 amount += order.Amount
             return "{0}@${1}".format(amount, best)
+
+    def GetQuote(self, option, ID):
+        """
+        Generate the quote based on a queue. Ignores ID, and only supports "BEST" for now.
+        :param option: str
+        :param ID: int
+        :return:
+        """
+
+        if len(self.Queue) == 0:
+            return ('None@None',)
+        if option == 'BEST':
+            best_price = self.Queue[0].Price
+            amount = 0
+            for order in self.Queue:
+                # We have to hit at least one order before this triggers
+                if not order.Price == best_price:
+                    break
+                else:
+                    amount += order.Amount
+            return ('{0}@{1}'.format(amount, best_price),)
+        elif option == 'MINE':
+            out = []
+            for order in self.Queue:
+                if order.ID_Player == ID:
+                    out.append('{0}@{1}'.format(order.Amount, order.Price))
+            if len(out) == 0:
+                return ('None@None',)
+            else:
+                return out
+        else:
+            raise ProtocolError('Unsupported quote type: ' + option)
+
+
+
 
 
 class ClientPricingInformation(object):
@@ -260,6 +298,15 @@ class Commodity(object):
 
     def GetInfo(self, option):
         return 'BUY;{0}|SELL;{1}'.format(self.BuyQueue.GetInfo(option), self.SellQueue.GetInfo(option))
+
+    def GetQuote(self, option, ID):
+        """
+        Return ('bid_string', 'ask_string') based on the option and ID. Ignores ID for now
+        :param option: str
+        :param ID: int
+        :return:
+        """
+        return (self.BuyQueue.GetQuote(option, ID), self.SellQueue.GetQuote(option, ID))
 
 
     def ProcessOrder(self, order):
@@ -330,6 +377,7 @@ class Exchange(object):
 
     def ProcessQuery(self, query_str, query_ID):
         """
+        DEPRECATED
         Query format:
         '?Q|Exchange|Commodity'
         (Currently does not care about the ID of the query agent.
@@ -366,40 +414,41 @@ class Exchange(object):
         out = '=Q|{0}|{1}|{2}'.format(info[1], info[2], commodity.GetInfo(option))
         return out
 
-
-
-    def ProcessOrder(self, order_str, order_ID):
+    def GetQuote(self, ID, exchange, commodity, quote_type, protocol):
         """
-        Process a buy/sell order that comes in as a string.
-        Returns a list of messages to be relayed
-         [ (ID_player, message), ...]
-
-         Format:
-         '!|<Exchange>|<commodity>|<B/S>|amount|price'
-        :param order_str: str
-        :return: list
+        For now, ignores the ID.
+        :param ID: int
+        :param exchange: str
+        :param commodity: str
+        :param quote_type: str
+        :param protocol: Protocol
+        :return:
         """
-        info = order_str.split('|')
-        if not len(info) == 6:
-            return [(order_ID, '* ERROR: Bad exchange order')]
-        dummy1, exchange, commodity_name, buy_sell, amount, price = info
+        if commodity not in self.Commodities:
+            raise ProtocolError('Commodity not in exchange: ' + commodity)
+        bid, offer = self.Commodities[commodity].GetQuote(quote_type, ID)
+        msg = protocol.BuildMessage('=Q', exchange, commodity, quote_type, bid, offer)
+        return msg
+
+
+    def ProcessOrder(self, order_ID, exchange, commodity_name, buy_sell, amount, price, protocol):
+        """
+        Add a new order to the exchange
+        :param order_ID: int
+        :param exchange: str
+        :param commodity_name: str
+        :param buy_sell: str
+        :param amount: int
+        :param price: int
+        :param protocol: Protocol
+        :return:
+        """
         if commodity_name not in self.Commodities:
-            return [(order_ID, '* ERROR: Unknown commodity: ' + commodity_name)]
-        if buy_sell not in ('B', 'S'):
-            return [(order_ID, '* ERROR: NOT B or S: ' + buy_sell)]
+            raise ProtocolError('ERROR: Unknown commodity: ' + commodity_name)
         is_buy = buy_sell == 'B'
-        try:
-            amount = int(amount)
-            price = int(price)
-        except:
-            return [(order_ID, '* ERROR: Invalid amount or price')]
         order = Order(is_buy, amount=amount, price=price, ID_player=order_ID)
         commodity = self.Commodities[commodity_name]
-        try:
-            events = commodity.ProcessOrder(order)
-        except AccountingError as ex:
-            msg = ex.args[0]
-            return [(order_ID, msg)]
+        events = commodity.ProcessOrder(order)
         out = []
         for buy, sell, amount, price in events:
             if buy == sell:
@@ -412,8 +461,10 @@ class Exchange(object):
             except AccountingError:
                 raise ValueError('Transfer failed; Held information might be incoherent')
             self.CashBalance.Transfer(buy, sell, amount*price)
-            out.append((buy, '=BOUGHT|{0}|{1}|{2}|{3}'.format(exchange, commodity_name, amount, price)))
-            out.append((sell, '=SOLD|{0}|{1}|{2}|{3}'.format(exchange, commodity_name, amount, price)))
+            msg = protocol.BuildMessage('#O_FILL', exchange, commodity_name, 'B', amount, price)
+            out.append((buy, msg))
+            msg = protocol.BuildMessage('#O_FILL', exchange, commodity_name, 'S', amount, price)
+            out.append((sell, msg))
         return out
 
 

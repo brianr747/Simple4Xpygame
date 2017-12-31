@@ -12,14 +12,22 @@ Use "|" to separate lists.
 First character determines the type of message
 '?' = Query  [Normally to server, but can go to Clients.]
 '!' = Action
-'=' = Response to query, or update.
+'=' = Response to query.
+'#' = Notification
+'*' = Error
 
 Note that since we are networked, cannot guarantee anything about the order of responses...
+
+Note: The communication protocol implemented in *common.protocols.py*. the format of messages is defined as
+data.
+
 
 Actions
 -------
 
 '!JOIN_PLAYER' Client requests joining as actor in simulation. [Given next available player ID.]
 
-'!DIE!' Server tells a client to %$#& off. Possible triggers: a failed JOIN_PLAYER request,
+{See protocols.py}
+
+
 

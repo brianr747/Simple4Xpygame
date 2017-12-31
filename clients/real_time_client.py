@@ -49,7 +49,7 @@ class EconomicClient(RealTimeClient):
             return
         if event == 'join':
             self.MessagesOut.append('!JOIN_PLAYER')
-            msg = self.Protocol.BuildMessage('?T', REPEAT=True, STEP=self.TimeStepRequest)
+            msg = self.Protocol.BuildMessage('?T', repeat=True, step=self.TimeStepRequest)
             self.MessagesOut.append(msg)
             return
         if event == 'build_state' and self.BuildState:

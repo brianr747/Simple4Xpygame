@@ -31,10 +31,10 @@ class Client1(RealTimeClient):
             return
         if event == 'join':
             self.MessagesOut.append('!JOIN_PLAYER')
-            self.MessagesOut.append('?T|REPEAT|{0}'.format(self.TimeStepRequest))
+            self.MessagesOut.append('?T|T|{0}'.format(self.TimeStepRequest))
             return
         if event == 'sell':
-            self.MessagesOut.append('!O|W1|cats|S|10|10')
+            self.MessagesOut.append('!O|W1|Goods|S|10|10')
 
     def ParseMessage(self, msg):
         """
@@ -43,7 +43,7 @@ class Client1(RealTimeClient):
         :return:
         """
         # print(msg)
-        if msg.startswith('=T='):
+        if msg.startswith('=T|'):
             self.Time = int(msg[3:].strip())
 
 

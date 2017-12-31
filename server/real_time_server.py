@@ -13,7 +13,7 @@ from __future__ import print_function
 import clients.real_time_client
 from common import NormalTermination
 from common.event_queue import EventQueue, Event
-from common.exchange import Exchange, Balance
+from common.exchange import Exchange, Balance, AccountingError
 from common.production import Production, GetStandardProductionTemplates
 from common.protocols import Protocol, ProtocolError, UnsupportedMessage
 
@@ -231,6 +231,10 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
         super(RTS_BaseEconomicSimulation, self).SetHandlers()
         self.Protocol.Handlers['?W'] = self.HandlerQueryW
         self.Protocol.Handlers['?W1'] = self.HandlerQueryW1
+        self.Protocol.Handlers['!P'] = self.HandlerProduction
+        self.Protocol.Handlers['!O'] = self.HandlerOrder
+        self.Protocol.Handlers['?Q'] = self.HandlerQueryQ
+        self.Protocol.Handlers['?C'] = self.HandlerQueryC
 
     def CreateExchange(self, name, template_str):
         self.CreationInfo.append('CREATE_EXCHANGE\n{0}\n{1}'.format(name, template_str))
@@ -262,6 +266,28 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
         msg = self.Protocol.BuildMessage('=W1', exchange, self.Exchanges[exchange].Template.split(';'))
         self.SendMessage(msg, ID)
 
+    def HandlerOrder(self, ID, exchange, commodity, order_type, amount, price):
+        if exchange not in self.Exchanges:
+            raise ProtocolError('Non-existent exchange: ' + exchange)
+        try:
+            messages = self.Exchanges[exchange].ProcessOrder(ID, exchange, commodity, order_type, amount, price,
+                                                             self.Protocol)
+        except AccountingError as ex:
+            msg = self.Protocol.BuildMessage('#O_FAIL', ex.args[0])
+            self.SendMessage(msg, ID)
+            return
+        for ID_player, m in messages:
+            self.SendMessage(m, ID_player)
+
+    def HandlerQueryQ(self, ID, exchange, commodity, quote_type):
+        if exchange not in self.Exchanges:
+            raise ProtocolError('Non-existent exchange: ' + exchange)
+        msg = self.Exchanges[exchange].GetQuote(ID, exchange, commodity, quote_type, self.Protocol)
+        self.SendMessage(msg, ID)
+
+    def HandlerQueryC(self, ID):
+        msg = self.Protocol.BuildMessage('=C', self.CashBalances[ID], 0)
+        self.SendMessage(msg, ID)
 
     def ProcessQuery(self, ID, query):
         """
@@ -271,21 +297,6 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
         :return:
         """
         info = query.split('|')
-        if info[0] == 'W':
-            msg = ''
-            if len(info) == 1:
-                msg = '=W|' + '|'.join(self.Exchanges.keys())
-            elif len(info) == 2:
-                exchange_name = info[1]
-                if exchange_name in self.Exchanges:
-                    msg = '=W={0}|{1}'.format(exchange_name,
-                                              self.Exchanges[exchange_name].Template)
-                else:
-                    msg = '*W ERROR: No Exchange Named {0}'.format(exchange_name)
-            else:
-                msg = '*W ERROR: Unsupporteded Query'
-            self.SendMessage(msg, ID)
-            return
         if info[0] in ('Q', 'I'):
             if len(info) < 2:
                 self.SendMessage('*ERROR: Too short query = '+query, ID)
@@ -303,43 +314,7 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
         super(RTS_BaseEconomicSimulation, self).ProcessQuery(ID, query)
 
     def ProcessCommand(self, ID, msg):
-        if msg.startswith('O'):
-            info = msg.split('|')
-            if len(info) < 2:
-                self.SendMessage('Command too short: !' + msg, ID)
-                return
-            exchange = info[1]
-            if exchange not in self.Exchanges:
-                self.SendMessage('Non-existent exchange: ' + exchange, ID)
-                return
-            messages = self.Exchanges[exchange].ProcessOrder(msg, ID)
-            for ID_player, m in messages:
-                self.SendMessage(m, ID_player)
-            return
-        if msg.startswith('P'):
-            self.ProcessProductionMessage(ID, msg)
-            return
         super(RTS_BaseEconomicSimulation, self).ProcessCommand(ID, msg)
-
-    def ProcessEvent(self, event):
-        """
-        Deprecated...
-        :param event:
-        :return:
-        """
-        if type(event) == tuple:
-            if event[0] == 'PRODUCTION':
-                dummy, exchange_name, technique_name, ID, amount = event
-                exchange = self.Exchanges[exchange_name]
-                technique = self.Production.Techniques[technique_name]
-                # Return InProduction
-                for k,v in technique.InProduction:
-                    exchange.Commodities[k].Balances.ReleaseInProduction(ID, amount*v)
-                for k,v in technique.Output:
-                    exchange.Commodities[k].Balances[ID] = exchange.Commodities[k].Balances[ID] + (amount*v)
-                self.SendMessage('!P|{0}|{1}|{2}'.format(exchange_name, technique_name, amount), ID)
-                return
-        super(RTS_BaseEconomicSimulation, self).ProcessEvent(event)
 
     def EventProduction(self, exchange_name, technique_name, ID, amount):
         exchange = self.Exchanges[exchange_name]
@@ -349,31 +324,16 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
             exchange.Commodities[k].Balances.ReleaseInProduction(ID, amount * v)
         for k, v in technique.Output:
             exchange.Commodities[k].Balances[ID] = exchange.Commodities[k].Balances[ID] + (amount * v)
-        self.SendMessage('!P|{0}|{1}|{2}'.format(exchange_name, technique_name, amount), ID)
+        msg = self.Protocol.BuildMessage('#P', exchange_name, technique_name, amount)
+        self.SendMessage(msg, ID)
 
-
-
-
-
-    def ProcessProductionMessage(self, ID, msg):
-        info = msg.split('|')
-        if len(info) < 4:
-            self.SendMessage('* ERROR: Bad Production message: ' + msg, ID)
-            return
-        dummy, exchange_name, technique_name, amount = info[0:4]
+    def HandlerProduction(self, ID, exchange_name, technique_name, amount):
         if exchange_name not in self.Exchanges:
-            self.SendMessage('* ERROR: Exchange {0} does not exist'.format(exchange_name), ID)
-            return
+            raise ProtocolError('Exchange does not exist: {0}'.format(exchange_name))
         exchange = self.Exchanges[exchange_name]
         if technique_name not in self.Production.Techniques:
-            self.SendMessage('* ERROR: Unknown production technique: {0}'.format(technique_name), ID)
-            return
+            raise ProtocolError('Unknown production technique: {0}'.format(technique_name))
         technique = self.Production[technique_name]
-        try:
-            amount = int(amount)
-        except:
-            self.SendMessage('* ERROR: Bad production amount: {0}'.format(amount), ID)
-            return
         # Must meet all required inputs.
         requirements = {}
         # The trick is that we could have the same commodity both required and InProduction
@@ -387,8 +347,7 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
         # Now check
         for k,v in requirements.items():
             if amount*v > exchange.GetInventory(k, ID):
-                self.SendMessage('*ERROR: Insufficient {0} FOR PRODUCTION'.format(k), ID)
-                return
+                raise ProtocolError('*ERROR: Insufficient {0} FOR PRODUCTION'.format(k))
         # Now, do the work
         for k,v in technique.Consumed:
             exchange.Commodities[k].Balances.Consume(ID, amount*v)
@@ -396,7 +355,8 @@ class RTS_BaseEconomicSimulation(RTS_BaseSimulation):
             exchange.Commodities[k].Balances.MoveToInProduction(ID, amount*v)
         event = Event(callback=self.EventProduction)
         event.Args = (exchange_name, technique_name, ID, amount)
-        event.Text = 'Production Event From {0}: {1}'.format(ID, msg)
+        event.Text = 'Production Event From {0}: Exchange={1} Technique={2} Amount={3}'.format(ID,
+                                exchange_name, technique_name, amount)
         self.EventQueue.InsertEvent(self.T + technique.Time, event)
 
 
